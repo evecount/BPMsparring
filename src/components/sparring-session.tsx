@@ -494,8 +494,8 @@ export function SparringSession() {
               <Card className="glass-panel">
                 <CardHeader className="p-2 md:p-4">
                   <CardTitle className="text-sm md:text-base">Accuracy</CardTitle>
-                </Header>
-                <CardContent className="p-2 md-p-4">
+                </CardHeader>
+                <CardContent className="p-2 md:p-4">
                   <p className="text-xl md:text-3xl font-bold">{sessionStats.accuracy.toFixed(1)}%</p>
                 </CardContent>
               </Card>
@@ -508,5 +508,3 @@ export function SparringSession() {
   
   return renderContent();
 }
-
-    
