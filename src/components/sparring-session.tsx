@@ -24,10 +24,10 @@ const CHALLENGE_LEVELS: Record<ChallengeLevel, { speed: number; complexity: numb
 };
 
 const MUSIC_TRACKS = [
-    { name: "No Music", src: "none" },
-    { name: "Mission Ready", src: "https://files.freemusicarchive.org/storage-freemusicarchive-org/music/cc_by/Ketsa/Raising_Frequecies/Ketsa_-_03_-_Mission_Ready.mp3" },
-    { name: "The 90s", src: "https://files.freemusicarchive.org/storage-freemusicarchive-org/music/no_curator/Monk/The_Sagat/Monk_-_09_-_The_90s.mp3" },
-    { name: "Enthusiast", src: "https://files.freemusicarchive.org/storage-freemusicarchive-org/music/cc_by/Tours/Enthusiast/Tours_-_01_-_Enthusiast.mp3" },
+    { name: "No Music", src: "none", bpm: 0 },
+    { name: "Mission Ready", src: "https://files.freemusicarchive.org/storage-freemusicarchive-org/music/cc_by/Ketsa/Raising_Frequecies/Ketsa_-_03_-_Mission_Ready.mp3", bpm: 120 },
+    { name: "The 90s", src: "https://files.freemusicarchive.org/storage-freemusicarchive-org/music/no_curator/Monk/The_Sagat/Monk_-_09_-_The_90s.mp3", bpm: 100 },
+    { name: "Enthusiast", src: "https://files.freemusicarchive.org/storage-freemusicarchive-org/music/cc_by/Tours/Enthusiast/Tours_-_01_-_Enthusiast.mp3", bpm: 130 },
 ];
 
 export function SparringSession() {
@@ -45,6 +45,15 @@ export function SparringSession() {
   const lastHitTimestamp = useRef(0);
   const audioRef = useRef<HTMLAudioElement>(null);
   const nextComboTimeout = useRef<NodeJS.Timeout | null>(null);
+
+  const getCombinationDelay = useCallback(() => {
+    const musicTrack = MUSIC_TRACKS.find(track => track.src === selectedMusic);
+    if (musicTrack && musicTrack.bpm > 0) {
+      // 60,000ms per minute / BPM = ms per beat. Let's do 4 beats.
+      return (60000 / musicTrack.bpm) * 4;
+    }
+    return CHALLENGE_LEVELS[challengeLevel].speed;
+  }, [selectedMusic, challengeLevel]);
 
 
   const resetSession = () => {
@@ -136,9 +145,9 @@ export function SparringSession() {
 
   useEffect(() => {
     if (sessionState === "running" && targets.length > 0 && currentTargetIndex.current >= targets.length && !isFetchingCombo) {
-        scheduleNextCombination(CHALLENGE_LEVELS[challengeLevel].speed);
+        scheduleNextCombination(getCombinationDelay());
     }
-  }, [sessionState, targets, isFetchingCombo, fetchNextCombination, challengeLevel]);
+  }, [sessionState, targets, isFetchingCombo, fetchNextCombination, getCombinationDelay]);
 
   useEffect(() => {
     if (sessionState === "running" && targets.length === 0 && !isFetchingCombo) {
@@ -237,14 +246,14 @@ export function SparringSession() {
                 currentTargetIndex.current++;
               } else {
                 currentTargetIndex.current++; // Move past the last target
-                scheduleNextCombination(CHALLENGE_LEVELS[challengeLevel].speed);
+                scheduleNextCombination(getCombinationDelay());
               }
             }
           }
         }
       }
     }
-  }, [results, canvasRef, videoRef, sessionState, targets, challengeLevel]);
+  }, [results, canvasRef, videoRef, sessionState, targets, getCombinationDelay]);
   
   useEffect(() => {
     let animationFrameId: number;
@@ -312,7 +321,7 @@ export function SparringSession() {
                     </SelectTrigger>
                     <SelectContent>
                       {MUSIC_TRACKS.map(track => (
-                        <SelectItem key={track.src} value={track.src}>{track.name}</SelectItem>
+                        <SelectItem key={track.src} value={track.src}>{track.name}{track.bpm > 0 && ` (${track.bpm} BPM)`}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
