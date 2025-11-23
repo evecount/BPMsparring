@@ -1,0 +1,125 @@
+/**
+ * @file firestore.rules
+ * @description Security rules for the Digital Spar Firestore database.
+ *
+ * Core Philosophy:
+ * This ruleset enforces a strict user-ownership model. All user-generated data,
+ * including training results and personal information, is siloed within paths
+ * specific to that user's ID. A user can only access their own data, and there
+ * is no mechanism for one user to read or write another user's information.
+ *
+ * Data Structure:
+ * - /users/{userId}: A user's primary document containing their profile and
+ *   subscription status. This is the root of their data tree.
+ * - /users/{userId}/results/{resultId}: A subcollection containing all of a
+ *   user's individual training session results.
+ * - /metrics/{userId}: A separate top-level collection storing aggregated,
+ *   pre-calculated metrics for a user. This collection is managed by backend
+ *   processes (Cloud Functions) and is read-only for clients.
+ *
+ * Key Security Decisions:
+ * - User Enumeration Disabled: Listing documents in the top-level /users
+ *   collection is explicitly forbidden to protect user privacy.
+ * - Backend-Managed Metrics: To prevent users from tampering with their own
+ *   aggregated stats (like total wins), the /metrics collection is made
+ *   read-only from the client side. All write operations to this collection
+ *   must originate from a trusted server environment (e.g., a Cloud Function).
+ * - Path-Based Security: Ownership is determined by matching the authenticated
+ *   user's UID against the {userId} wildcard in the document path, which is
+ *   the most performant and secure way to control access.
+ * - Relational Integrity: On document creation, internal ID fields (like 'userId'
+ *   on a Result document) are validated to match the document's path, ensuring
+ *   data consistency from the start. These fields are immutable on update.
+ */
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions to improve readability and maintainability.
+
+    /**
+     * Returns true if the user is authenticated.
+     */
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    /**
+     * Returns true if the requesting user's UID matches the provided userId.
+     * This is the primary function for enforcing document ownership.
+     */
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    /**
+     * Returns true if the user owns the document and the document already exists.
+     * Used for safe update and delete operations.
+     */
+    function isExistingOwner(userId) {
+      return isOwner(userId) && resource != null;
+    }
+
+    /**
+     * Validates that a critical relational field is being set correctly on creation.
+     * The incoming document's field must match the expected path parameter.
+     */
+    function hasValidLink(fieldName, id) {
+      return request.resource.data[fieldName] == id;
+    }
+
+    /**
+     * Validates that a critical relational field cannot be changed after creation.
+     */
+    function isImmutable(fieldName) {
+      return request.resource.data[fieldName] == resource.data[fieldName];
+    }
+
+    /**
+     * @description Rules for a user's primary document.
+     * @path /users/{userId}
+     * @allow (create) An authenticated user creating their own user document.
+     * @deny (create) An authenticated user trying to create a document for another user.
+     * @deny (list) Any user, authenticated or not, trying to list all users.
+     * @principle Enforces strict document ownership and self-creation, while preventing user enumeration.
+     */
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow list: if false;
+      allow create: if isOwner(userId) && hasValidLink('id', userId);
+      allow update: if isExistingOwner(userId) && isImmutable('id');
+      allow delete: if isExistingOwner(userId);
+
+      /**
+       * @description Rules for a user's individual training results.
+       * @path /users/{userId}/results/{resultId}
+       * @allow (create) An authenticated user creating a result within their own subcollection.
+       * @deny (get) An authenticated user trying to read a result from another user's subcollection.
+       * @principle Restricts access to a user's own private data subcollection.
+       */
+      match /results/{resultId} {
+        allow get: if isOwner(userId);
+        allow list: if isOwner(userId);
+        allow create: if isOwner(userId) && hasValidLink('userId', userId);
+        allow update: if isExistingOwner(userId) && isImmutable('userId');
+        allow delete: if isExistingOwner(userId);
+      }
+    }
+
+    /**
+     * @description Rules for aggregated user metrics. This data is managed by the backend.
+     * @path /metrics/{userId}
+     * @allow (get) An authenticated user reading their own aggregated metrics.
+     * @deny (create) Any user trying to create a metric document, as this is handled by Cloud Functions.
+     * @deny (update) A user trying to tamper with their own stats, like 'totalWins'.
+     * @principle Protects backend-managed data from client modification while allowing owner-only reads.
+     */
+    match /metrics/{userId} {
+      allow get: if isOwner(userId);
+      allow list: if isOwner(userId);
+      allow create: if false;
+      allow update: if false;
+      allow delete: if false;
+    }
+  }
+}

@@ -1,0 +1,164 @@
+{
+  "entities": {
+    "User": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "User",
+      "type": "object",
+      "description": "Represents a user within the Digital Spar application.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the User entity."
+        },
+        "subscriptionStatus": {
+          "type": "string",
+          "description": "The user's subscription status (e.g., 'active', 'inactive')."
+        },
+        "lastLogin": {
+          "type": "string",
+          "description": "Timestamp of the user's last login.",
+          "format": "date-time"
+        },
+        "stripeCustomerId": {
+          "type": "string",
+          "description": "The user's Stripe Customer ID."
+        },
+        "displayName": {
+          "type": "string",
+          "description": "The user's display name."
+        }
+      },
+      "required": [
+        "id"
+      ]
+    },
+    "Result": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Result",
+      "type": "object",
+      "description": "Represents a single training session result.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Result entity."
+        },
+        "userId": {
+          "type": "string",
+          "description": "Reference to User. (Relationship: User 1:N Result)"
+        },
+        "date": {
+          "type": "string",
+          "description": "Date and time of the training session.",
+          "format": "date-time"
+        },
+        "speedScore": {
+          "type": "number",
+          "description": "Speed score achieved during the session."
+        },
+        "accuracyScore": {
+          "type": "number",
+          "description": "Accuracy score achieved during the session."
+        },
+        "opponentName": {
+          "type": "string",
+          "description": "Name of the opponent (if applicable)."
+        }
+      },
+      "required": [
+        "id",
+        "userId",
+        "date"
+      ]
+    },
+    "Metric": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Metric",
+      "type": "object",
+      "description": "Represents aggregated user metrics.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Metric entity (matches User ID)."
+        },
+        "totalWins": {
+          "type": "number",
+          "description": "Total number of wins."
+        },
+        "longestStreak": {
+          "type": "number",
+          "description": "Longest winning streak."
+        },
+        "avgSpeed": {
+          "type": "number",
+          "description": "Average speed across all sessions."
+        }
+      },
+      "required": [
+        "id"
+      ]
+    }
+  },
+  "auth": {
+    "providers": [
+      "password",
+      "anonymous"
+    ]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "/users/{userId}",
+        "definition": {
+          "entityName": "User",
+          "schema": {
+            "$ref": "#/backend/entities/User"
+          },
+          "description": "Stores core user data and subscription status. Includes denormalized 'subscriptionStatus' for authorization independence.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique ID of the user."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}/results/{resultId}",
+        "definition": {
+          "entityName": "Result",
+          "schema": {
+            "$ref": "#/backend/entities/Result"
+          },
+          "description": "Stores individual training results for each user. Path-based ownership ensures only the user can access their results.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique ID of the user."
+            },
+            {
+              "name": "resultId",
+              "description": "The unique ID of the training result."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/metrics/{userId}",
+        "definition": {
+          "entityName": "Metric",
+          "schema": {
+            "$ref": "#/backend/entities/Metric"
+          },
+          "description": "Stores pre-calculated metrics for each user, derived from the 'results' collection. ID matches the user ID for easy access.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique ID of the user."
+            }
+          ]
+        }
+      }
+    ],
+    "reasoning": "This Firestore structure is designed to support the Digital Spar application, focusing on secure user management, efficient storage of training results, and real-time metrics. It prioritizes Authorization Independence to enable robust security rules and atomic operations. The structure is segregated to ensure that documents within the same collection share similar security requirements, and it uses access modeling to standardize authorization logic.\n\n*   **Authorization Independence:** Achieved by storing all authorization-related information (subscription status) directly within the `users` document. This avoids the need for `get()` calls in security rules, enabling atomic operations and simplifying rule logic.\n*   **QAPs:** The structure supports secure `list` operations by segregating user data into user-specific collections (`/users/{userId}/results`) and by using path-based ownership, ensuring only the authorized user can access their data.\n\nThe `metrics` collection stores aggregated data, updated via a Cloud Function trigger, to optimize read performance for real-time display."
+  }
+}
