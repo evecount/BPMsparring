@@ -3,6 +3,7 @@ import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
 import { AppShell } from '@/components/app-shell';
 import { FirebaseClientProvider } from '@/firebase/client-provider';
+import { SparringProvider } from '@/context/SparringContext';
 
 export const metadata: Metadata = {
   title: 'BPMsparring',
@@ -23,7 +24,9 @@ export default function RootLayout({
       </head>
       <body className="font-body antialiased">
         <FirebaseClientProvider>
-          <AppShell>{children}</AppShell>
+          <SparringProvider>
+            <AppShell>{children}</AppShell>
+          </SparringProvider>
         </FirebaseClientProvider>
         <Toaster />
       </body>

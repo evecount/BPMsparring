@@ -1,21 +1,21 @@
 
 'use client';
 
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useContext } from 'react';
 import { Loader2, AlertCircle, Play, Pause, X, Music, Bot } from 'lucide-react';
 import { useHandTracker } from '@/hooks/use-hand-tracker';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { PUNCH_MAP, TARGET_POSITIONS, TARGET_RADIUS } from '@/lib/constants';
-import type { Target, SparringStats, Handedness, ChallengeLevel, BeatMap } from '@/lib/types';
+import type { Target, SparringStats, Handedness, ChallengeLevel } from '@/lib/types';
 import { useFirestore, useUser } from '@/firebase';
-import { doc, setDoc, serverTimestamp, collection, addDoc, Firestore, writeBatch, getDoc } from 'firebase/firestore';
+import { doc, getDoc, writeBatch, collection, serverTimestamp } from 'firebase/firestore';
 import { suggestCombination } from '@/ai/flows/suggest-combination';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useRouter } from 'next/navigation';
 import { MUSIC_TRACKS } from '@/lib/beat-maps';
 import { Textarea } from '@/components/ui/textarea';
+import { SparringContext } from '@/context/SparringContext';
 
 type SessionState = 'idle' | 'starting' | 'running' | 'paused' | 'error';
 
@@ -29,18 +29,17 @@ const CHALLENGE_LEVELS = {
 
 export function SparringSession() {
   const { videoRef, canvasRef, results, loading, error, startTracker, stopTracker } = useHandTracker();
-  const [sessionState, setSessionState] = useState<SessionState>('idle');
+  const { sessionStats, setSessionStats, sessionState, setSessionState } = useContext(SparringContext);
+  
   const [targets, setTargets] = useState<Target[]>([]);
   const [combinationHistory, setCombinationHistory] = useState<string[]>([]);
-  const [sessionStats, setSessionStats] = useState(initialStats);
   const [isFetchingCombo, setIsFetchingCombo] = useState(false);
   const [challengeLevel, setChallengeLevel] = useState<ChallengeLevel>('Medium');
   const [selectedMusic, setSelectedMusic] = useState(MUSIC_TRACKS[0]);
   const [customPrompt, setCustomPrompt] = useState('');
 
   const { user } = useUser();
-  const firestore = useFirestore() as Firestore;
-  const router = useRouter();
+  const firestore = useFirestore();
 
   const lastHitTimestamp = useRef(0);
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -50,7 +49,6 @@ export function SparringSession() {
 
   const nextComboTimeout = useRef<NodeJS.Timeout | null>(null);
   const currentTargetIndex = useRef(0);
-
 
   const resetSession = () => {
     setSessionStats(initialStats);
@@ -64,6 +62,7 @@ export function SparringSession() {
   };
 
   const handleStart = async () => {
+    if (!setSessionState) return;
     resetSession();
     setSessionState('starting');
     await startTracker();
@@ -71,7 +70,7 @@ export function SparringSession() {
 
   const handleStop = async () => {
     stopTracker();
-    setSessionState('idle');
+    if (setSessionState) setSessionState('idle');
 
     if (user && firestore && sessionStats.punches > 0) {
       const batch = writeBatch(firestore);
@@ -107,6 +106,7 @@ export function SparringSession() {
             bestStreak: Math.max(currentMetrics.bestStreak, sessionStats.bestStreak),
             accuracy: newAccuracy,
             avgSpeed: newAvgSpeed,
+            id: user.uid, // ensure id is set for new metrics
           },
           { merge: true }
         );
@@ -124,6 +124,7 @@ export function SparringSession() {
   };
   
   const handlePause = () => {
+    if (!setSessionState) return;
     setSessionState(ss => {
       if (ss === 'running') {
         if (audioRef.current?.src && selectedMusic.src !== 'none') audioRef.current.pause();
@@ -177,11 +178,11 @@ export function SparringSession() {
       currentTargetIndex.current = 0;
     } catch (e) {
       console.error('Failed to get new combination', e);
-      setSessionState('error');
+      if (setSessionState) setSessionState('error');
     } finally {
       setIsFetchingCombo(false);
     }
-  }, [combinationHistory, challengeLevel, isFetchingCombo, selectedMusic, customPrompt]);
+  }, [combinationHistory, challengeLevel, isFetchingCombo, selectedMusic, customPrompt, setSessionState]);
 
   const gameLoop = useCallback(() => {
     const isChoreographed = selectedMusic.punches.length > 0;
@@ -251,7 +252,6 @@ export function SparringSession() {
 
     if (sessionState !== 'running') return;
     
-    // Determine the current target(s)
     const activeTargets = selectedMusic.punches.length > 0 
       ? targets.filter(t => !t.hit)
       : targets.slice(currentTargetIndex.current, currentTargetIndex.current + 1);
@@ -286,21 +286,18 @@ export function SparringSession() {
 
           for (const target of activeTargets) {
             if (handedness === target.hand) {
-              const targetX = target.x * canvas.width;
-              const targetY = target.y * canvas.height;
-
               const distance = Math.sqrt(Math.pow(handX - targetX, 2) + Math.pow(handY - targetY, 2));
 
               if (distance < target.radius) {
                 const hitTime = Date.now();
-                if (hitTime - lastHitTimestamp.current > 300) { // Debounce hits
+                if (hitTime - lastHitTimestamp.current > 300) { 
                   lastHitTimestamp.current = hitTime;
 
                   setSessionStats(prev => {
                     const newPunches = prev.punches + 1;
                     const newStreak = prev.streak + 1;
                     const totalPunchesForAcc = prev.punches;
-                    const newAccuracy = totalPunchesForAcc > 0 ? (prev.accuracy * (totalPunchesForAcc -1) + 100) / totalPunchesForAcc : 100;
+                    const newAccuracy = totalPunchesForAcc > 0 ? (prev.accuracy * totalPunchesForAcc + 100) / (totalPunchesForAcc + 1) : 100;
 
                     return { ...prev, score: prev.score + 10, punches: newPunches, accuracy: newAccuracy, streak: newStreak, bestStreak: Math.max(prev.bestStreak, newStreak) };
                   });
@@ -311,7 +308,7 @@ export function SparringSession() {
                     if (currentTargetIndex.current < targets.length - 1) {
                       currentTargetIndex.current++;
                     } else {
-                      currentTargetIndex.current++; // Mark combo as finished
+                      currentTargetIndex.current++; 
                     }
                   }
                 }
@@ -321,11 +318,11 @@ export function SparringSession() {
         }
       }
     }
-  }, [results, canvasRef, videoRef, sessionState, targets, selectedMusic]);
+  }, [results, canvasRef, videoRef, sessionState, targets, selectedMusic, setSessionStats]);
 
   useEffect(() => {
     if (sessionState === 'running') {
-      gameLoop();
+      gameLoopRef.current = requestAnimationFrame(gameLoop);
     } else {
       if (gameLoopRef.current) cancelAnimationFrame(gameLoopRef.current);
     }
@@ -337,18 +334,17 @@ export function SparringSession() {
 
   useEffect(() => {
     if (!loading && sessionState === 'starting') {
-      setSessionState('running');
+      if (setSessionState) setSessionState('running');
       if (audioRef.current?.src && selectedMusic.src !== 'none') {
         audioRef.current.play().catch(e => console.error('Audio play failed:', e));
       }
-      // Kick off the game loop as soon as the session is running
       gameLoop();
     }
-  }, [loading, sessionState, selectedMusic, gameLoop]);
+  }, [loading, sessionState, selectedMusic, gameLoop, setSessionState]);
 
   useEffect(() => {
-    if (error) setSessionState('error');
-  }, [error]);
+    if (error && setSessionState) setSessionState('error');
+  }, [error, setSessionState]);
 
   useEffect(() => {
     if (audioRef.current) {
@@ -466,42 +462,6 @@ export function SparringSession() {
             <Button size="icon" onClick={handlePause}>
               {sessionState === 'paused' ? <Play /> : <Pause />}
             </Button>
-          </div>
-          <div className="absolute bottom-4 left-4 right-4 z-10">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full max-w-4xl mx-auto">
-              <Card className="glass-panel">
-                <CardHeader className="p-2 md:p-4">
-                  <CardTitle className="text-sm md:text-base">Score</CardTitle>
-                </CardHeader>
-                <CardContent className="p-2 md:p-4">
-                  <p className="text-xl md:text-3xl font-bold">{sessionStats.score}</p>
-                </CardContent>
-              </Card>
-              <Card className="glass-panel">
-                <CardHeader className="p-2 md:p-4">
-                  <CardTitle className="text-sm md:text-base">Punches</CardTitle>
-                </CardHeader>
-                <CardContent className="p-2 md:p-4">
-                  <p className="text-xl md:text-3xl font-bold">{sessionStats.punches}</p>
-                </CardContent>
-              </Card>
-              <Card className="glass-panel">
-                <CardHeader className="p-2 md:p-4">
-                  <CardTitle className="text-sm md:text-base">Streak</CardTitle>
-                </CardHeader>
-                <CardContent className="p-2 md:p-4">
-                  <p className="text-xl md:text-3xl font-bold">{sessionStats.streak}</p>
-                </CardContent>
-              </Card>
-              <Card className="glass-panel">
-                <CardHeader className="p-2 md:p-4">
-                  <CardTitle className="text-sm md:text-base">Accuracy</CardTitle>
-                </CardHeader>
-                <CardContent className="p-2 md:p-4">
-                  <p className="text-xl md:text-3xl font-bold">{sessionStats.accuracy.toFixed(1)}%</p>
-                </CardContent>
-              </Card>
-            </div>
           </div>
         </div>
       </div>
