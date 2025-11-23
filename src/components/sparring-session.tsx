@@ -341,8 +341,10 @@ export function SparringSession() {
       if (audioRef.current?.src && selectedMusic.src !== 'none') {
         audioRef.current.play().catch(e => console.error('Audio play failed:', e));
       }
+      // Kick off the game loop as soon as the session is running
+      gameLoop();
     }
-  }, [loading, sessionState, selectedMusic]);
+  }, [loading, sessionState, selectedMusic, gameLoop]);
 
   useEffect(() => {
     if (error) setSessionState('error');
