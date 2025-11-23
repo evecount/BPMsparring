@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { Loader2, AlertCircle, CameraOff, Play, Pause } from "lucide-react";
+import { Loader2, AlertCircle, CameraOff, Play, Pause, X } from "lucide-react";
 import { useHandTracker } from "@/hooks/use-hand-tracker";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -216,7 +216,7 @@ export function SparringSession() {
 
     if (sessionState === "idle") {
       return (
-        <div className="text-center">
+        <div className="text-center p-4">
             <h1 className="text-4xl font-bold tracking-tight">Ready to Train?</h1>
             <p className="text-muted-foreground mt-2 max-w-xl mx-auto">Allow camera access and get ready to spar with your AI coach. We'll track your hands and give you combinations to throw.</p>
             <Button size="lg" className="mt-8" onClick={handleStart}>
@@ -227,8 +227,8 @@ export function SparringSession() {
     }
     
     return (
-        <div className="w-full h-full flex flex-col items-center gap-4">
-            <div className="relative w-full aspect-video max-w-4xl rounded-lg overflow-hidden border-4 border-primary shadow-2xl">
+        <div className="w-full h-full flex flex-col items-center justify-center bg-black">
+            <div className="relative w-full h-full">
                 {(sessionState === "starting" || loading) && (
                     <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center z-20">
                         <Loader2 className="w-16 h-16 animate-spin text-primary-foreground" />
@@ -237,32 +237,34 @@ export function SparringSession() {
                 )}
                 <video ref={videoRef} className="absolute inset-0 w-full h-full object-cover" style={{ display: 'none' }} playsInline />
                 <canvas ref={canvasRef} className="absolute inset-0 w-full h-full object-cover" />
-                <div className="absolute top-4 left-4 z-10">
+                <div className="absolute top-4 left-4 z-10 flex gap-2">
                     <Button size="icon" onClick={handleStop} variant="destructive">
-                        <CameraOff />
+                        <X />
                     </Button>
-                    <Button size="icon" onClick={handlePause} className="ml-2">
+                    <Button size="icon" onClick={handlePause}>
                         {sessionState === 'paused' ? <Play/> : <Pause/>}
                     </Button>
                 </div>
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full max-w-4xl">
-                <Card>
-                    <CardHeader><CardTitle>Score</CardTitle></CardHeader>
-                    <CardContent><p className="text-3xl font-bold">{sessionStats.score}</p></CardContent>
-                </Card>
-                 <Card>
-                    <CardHeader><CardTitle>Punches</CardTitle></CardHeader>
-                    <CardContent><p className="text-3xl font-bold">{sessionStats.punches}</p></CardContent>
-                </Card>
-                 <Card>
-                    <CardHeader><CardTitle>Streak</CardTitle></CardHeader>
-                    <CardContent><p className="text-3xl font-bold">{sessionStats.streak}</p></CardContent>
-                </Card>
-                 <Card>
-                    <CardHeader><CardTitle>Accuracy</CardTitle></CardHeader>
-                    <CardContent><p className="text-3xl font-bold">{sessionStats.accuracy.toFixed(1)}%</p></CardContent>
-                </Card>
+                 <div className="absolute bottom-4 left-4 right-4 z-10">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full max-w-4xl mx-auto">
+                        <Card className="bg-black/50 text-white">
+                            <CardHeader className="p-2 md:p-4"><CardTitle className="text-sm md:text-base">Score</CardTitle></CardHeader>
+                            <CardContent className="p-2 md:p-4"><p className="text-xl md:text-3xl font-bold">{sessionStats.score}</p></CardContent>
+                        </Card>
+                        <Card className="bg-black/50 text-white">
+                            <CardHeader className="p-2 md:p-4"><CardTitle className="text-sm md:text-base">Punches</CardTitle></CardHeader>
+                            <CardContent className="p-2 md:p-4"><p className="text-xl md:text-3xl font-bold">{sessionStats.punches}</p></CardContent>
+                        </Card>
+                        <Card className="bg-black/50 text-white">
+                            <CardHeader className="p-2 md:p-4"><CardTitle className="text-sm md:text-base">Streak</CardTitle></CardHeader>
+                            <CardContent className="p-2 md:p-4"><p className="text-xl md:text-3xl font-bold">{sessionStats.streak}</p></CardContent>
+                        </Card>
+                        <Card className="bg-black/50 text-white">
+                            <CardHeader className="p-2 md:p-4"><CardTitle className="text-sm md:text-base">Accuracy</CardTitle></CardHeader>
+                            <CardContent className="p-2 md:p-4"><p className="text-xl md:text-3xl font-bold">{sessionStats.accuracy.toFixed(1)}%</p></CardContent>
+                        </Card>
+                    </div>
+                </div>
             </div>
         </div>
     );
