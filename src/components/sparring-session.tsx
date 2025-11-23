@@ -233,7 +233,7 @@ export function SparringSession() {
 
     draw();
     gameLoopRef.current = requestAnimationFrame(gameLoop);
-  }, [selectedMusic, targets, isFetchingCombo, fetchNextAICombination, scheduleNextAICombination]);
+  }, [selectedMusic, targets, isFetchingCombo, fetchNextAICombination]);
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -443,11 +443,12 @@ export function SparringSession() {
     return (
       <div className="w-full h-full flex flex-col items-center justify-center bg-black/50">
         <div className="relative w-full h-full">
-          {sessionState === 'starting' ||
-            (loading && <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center z-20">
-                <Loader2 className="w-16 h-16 animate-spin text-primary" />
-                <p className="text-primary-foreground mt-4 text-lg">Starting camera & loading AI model...</p>
-              </div>)}
+          {(sessionState === 'starting' || loading) && (
+            <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center z-20">
+              <Loader2 className="w-16 h-16 animate-spin text-primary" />
+              <p className="text-primary-foreground mt-4 text-lg">Starting camera & loading AI model...</p>
+            </div>
+          )}
           <video ref={videoRef} className="absolute inset-0 w-full h-full object-cover" style={{ transform: 'scaleX(-1)' }} playsInline />
           <canvas ref={canvasRef} className="absolute inset-0 w-full h-full object-cover" />
           <div className="absolute top-4 left-4 z-10 flex gap-2">
