@@ -421,7 +421,7 @@ export function SparringSession() {
                 <Select onValueChange={handleMusicChange} defaultValue={selectedMusic.src}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select music" />
-                  </Trigger>
+                  </SelectTrigger>
                   <SelectContent>
                     {MUSIC_TRACKS.map(track => (
                       <SelectItem key={track.src} value={track.src}>
