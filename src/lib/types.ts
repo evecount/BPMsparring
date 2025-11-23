@@ -1,3 +1,4 @@
+
 export type SparringStats = {
   score: number;
   punches: number;
@@ -23,3 +24,7 @@ export type Punch = {
   name: string; // 'Jab', 'Cross', etc.
   hand: Handedness;
 };
+
+export type ChallengeLevel = "Easy" | "Medium" | "Hard";
+
+    

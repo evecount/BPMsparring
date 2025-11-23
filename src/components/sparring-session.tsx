@@ -1,19 +1,34 @@
+
 "use client";
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { Loader2, AlertCircle, CameraOff, Play, Pause, X } from "lucide-react";
+import { Loader2, AlertCircle, CameraOff, Play, Pause, X, Music, Bot } from "lucide-react";
 import { useHandTracker } from "@/hooks/use-hand-tracker";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { PUNCH_MAP, TARGET_POSITIONS, TARGET_RADIUS, LOCAL_STORAGE_STATS_KEY } from "@/lib/constants";
-import type { Target, SparringStats, Handedness } from "@/lib/types";
+import type { Target, SparringStats, Handedness, ChallengeLevel } from "@/lib/types";
 import { useLocalStorage } from "@/hooks/use-local-storage";
 import { suggestCombination } from "@/ai/flows/suggest-combination";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 type SessionState = "idle" | "starting" | "running" | "paused" | "finished" | "error";
 
 const initialStats: SparringStats = { score: 0, punches: 0, accuracy: 0, streak: 0, bestStreak: 0, avgSpeed: 0 };
+
+const CHALLENGE_LEVELS: Record<ChallengeLevel, { speed: number; complexity: number }> = {
+  Easy: { speed: 1500, complexity: 3 },
+  Medium: { speed: 1000, complexity: 5 },
+  Hard: { speed: 700, complexity: 7 },
+};
+
+const MUSIC_TRACKS = [
+    { name: "No Music", src: "" },
+    { name: "Mission Ready", src: "https://files.freemusicarchive.org/storage-freemusicarchive-org/music/cc_by/Ketsa/Raising_Frequecies/Ketsa_-_03_-_Mission_Ready.mp3" },
+    { name: "The 90s", src: "https://files.freemusicarchive.org/storage-freemusicarchive-org/music/no_curator/Monk/The_Sagat/Monk_-_09_-_The_90s.mp3" },
+    { name: "Enthusiast", src: "https://files.freemusicarchive.org/storage-freemusicarchive-org/music/cc_by/Tours/Enthusiast/Tours_-_01_-_Enthusiast.mp3" },
+];
 
 export function SparringSession() {
   const { videoRef, canvasRef, results, loading, error, startTracker, stopTracker } = useHandTracker();
@@ -23,15 +38,23 @@ export function SparringSession() {
   const [stats, setStats] = useLocalStorage<SparringStats>(LOCAL_STORAGE_STATS_KEY, initialStats);
   const [sessionStats, setSessionStats] = useState(initialStats);
   const [isFetchingCombo, setIsFetchingCombo] = useState(false);
+  const [challengeLevel, setChallengeLevel] = useState<ChallengeLevel>("Medium");
+  const [selectedMusic, setSelectedMusic] = useState(MUSIC_TRACKS[0].src);
 
   const currentTargetIndex = useRef(0);
   const lastHitTimestamp = useRef(0);
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const nextComboTimeout = useRef<NodeJS.Timeout | null>(null);
+
 
   const resetSession = () => {
     setSessionStats(initialStats);
     setTargets([]);
     setCombinationHistory([]);
     currentTargetIndex.current = 0;
+    if (nextComboTimeout.current) {
+        clearTimeout(nextComboTimeout.current);
+    }
   };
 
   const handleStart = async () => {
@@ -47,22 +70,46 @@ export function SparringSession() {
       score: prevStats.score + sessionStats.score,
       punches: prevStats.punches + sessionStats.punches,
       bestStreak: Math.max(prevStats.bestStreak, sessionStats.bestStreak),
-      // A more complex averaging would be needed for accuracy and speed across sessions
       accuracy: sessionStats.punches > 0 ? ((prevStats.accuracy * prevStats.punches + sessionStats.accuracy * sessionStats.punches) / (prevStats.punches + sessionStats.punches)) : prevStats.accuracy,
       avgSpeed: sessionStats.punches > 0 ? ((prevStats.avgSpeed * prevStats.punches + sessionStats.avgSpeed * sessionStats.punches) / (prevStats.punches + sessionStats.punches)) : prevStats.avgSpeed,
       streak: 0,
     }));
+    if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+    }
   };
 
   const handlePause = () => {
-    setSessionState(ss => (ss === "running" ? "paused" : "running"));
+    setSessionState(ss => {
+        if (ss === "running") {
+            if (audioRef.current?.src) audioRef.current.pause();
+            if(nextComboTimeout.current) clearTimeout(nextComboTimeout.current);
+            return "paused";
+        }
+        if (ss === "paused") {
+            if (audioRef.current?.src) audioRef.current.play();
+            scheduleNextCombination(0);
+            return "running";
+        }
+        return ss;
+    });
+  }
+
+  const scheduleNextCombination = (delay: number) => {
+    if (nextComboTimeout.current) {
+      clearTimeout(nextComboTimeout.current);
+    }
+    nextComboTimeout.current = setTimeout(() => {
+        fetchNextCombination();
+    }, delay);
   }
 
   const fetchNextCombination = useCallback(async () => {
     setIsFetchingCombo(true);
     try {
       const { suggestedCombination } = await suggestCombination({ recentCombinations: combinationHistory.slice(-5) });
-      const punchKeys = suggestedCombination.split(/[-,\s]/).filter(p => PUNCH_MAP[p]);
+      const punchKeys = suggestedCombination.split(/[-,\s]/).filter(p => PUNCH_MAP[p]).slice(0, CHALLENGE_LEVELS[challengeLevel].complexity);
       const newTargets: Target[] = punchKeys.map((key, index) => {
         const punch = PUNCH_MAP[key];
         const position = TARGET_POSITIONS[key];
@@ -85,17 +132,26 @@ export function SparringSession() {
     } finally {
       setIsFetchingCombo(false);
     }
-  }, [combinationHistory]);
+  }, [combinationHistory, challengeLevel]);
+
+  useEffect(() => {
+    if (sessionState === "running" && targets.length > 0 && currentTargetIndex.current >= targets.length && !isFetchingCombo) {
+        scheduleNextCombination(CHALLENGE_LEVELS[challengeLevel].speed);
+    }
+  }, [sessionState, targets, isFetchingCombo, fetchNextCombination, challengeLevel]);
 
   useEffect(() => {
     if (sessionState === "running" && targets.length === 0 && !isFetchingCombo) {
-      fetchNextCombination();
+        fetchNextCombination();
     }
-  }, [sessionState, targets, isFetchingCombo, fetchNextCombination]);
+  }, [sessionState, targets.length, isFetchingCombo, fetchNextCombination]);
   
   useEffect(() => {
     if(!loading && sessionState === 'starting') {
         setSessionState('running');
+        if (audioRef.current?.src) {
+            audioRef.current.play();
+        }
     }
   }, [loading, sessionState]);
 
@@ -180,14 +236,15 @@ export function SparringSession() {
               if (currentTargetIndex.current < targets.length - 1) {
                 currentTargetIndex.current++;
               } else {
-                fetchNextCombination();
+                currentTargetIndex.current++; // Move past the last target
+                scheduleNextCombination(CHALLENGE_LEVELS[challengeLevel].speed);
               }
             }
           }
         }
       }
     }
-  }, [results, canvasRef, videoRef, sessionState, targets, fetchNextCombination]);
+  }, [results, canvasRef, videoRef, sessionState, targets, challengeLevel]);
   
   useEffect(() => {
     let animationFrameId: number;
@@ -203,6 +260,12 @@ export function SparringSession() {
     };
   }, [draw, sessionState]);
 
+  useEffect(() => {
+    if (audioRef.current) {
+        audioRef.current.src = selectedMusic;
+    }
+  }, [selectedMusic]);
+
   const renderContent = () => {
     if (sessionState === "error") {
       return (
@@ -216,12 +279,51 @@ export function SparringSession() {
 
     if (sessionState === "idle") {
       return (
-        <div className="text-center p-4">
+        <div className="text-center p-4 max-w-2xl mx-auto">
             <h1 className="text-4xl font-bold tracking-tight">Ready to Train?</h1>
-            <p className="text-muted-foreground mt-2 max-w-xl mx-auto">Allow camera access and get ready to spar with your AI coach. We'll track your hands and give you combinations to throw.</p>
+            <p className="text-muted-foreground mt-2">Configure your session and get ready to spar with your AI coach. We'll track your hands and give you combinations to throw.</p>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-lg"><Bot className="w-5 h-5"/> Challenge Level</CardTitle>
+                </CardHeader>
+                <CardContent>
+                   <Select onValueChange={(value: ChallengeLevel) => setChallengeLevel(value)} defaultValue={challengeLevel}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a level" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Easy">Easy</SelectItem>
+                      <SelectItem value="Medium">Medium</SelectItem>
+                      <SelectItem value="Hard">Hard</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </CardContent>
+              </Card>
+               <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-lg"><Music className="w-5 h-5"/> Music</CardTitle>
+                </CardHeader>
+                <CardContent>
+                   <Select onValueChange={setSelectedMusic} defaultValue={selectedMusic}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select music" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {MUSIC_TRACKS.map(track => (
+                        <SelectItem key={track.src} value={track.src}>{track.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </CardContent>
+              </Card>
+            </div>
+
             <Button size="lg" className="mt-8" onClick={handleStart}>
                 Start Session
             </Button>
+            <audio ref={audioRef} loop />
         </div>
       );
     }
@@ -272,3 +374,5 @@ export function SparringSession() {
 
   return renderContent();
 }
+
+    
