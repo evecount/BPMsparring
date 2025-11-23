@@ -329,7 +329,7 @@ export function SparringSession() {
       return (
         <div className="text-center p-4 max-w-2xl mx-auto">
             <h1 className="text-4xl font-bold tracking-tight">Ready to Train?</h1>
-            <p className="text-muted-foreground mt-2">Configure your session and get ready to spar with your AI coach. We'll track your hands and give you combinations to throw.</p>
+            <p className="mt-2 text-lg">Configure your session and get ready to spar with your AI coach. We'll track your hands and give you combinations to throw.</p>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
               <Card className="glass-panel">
