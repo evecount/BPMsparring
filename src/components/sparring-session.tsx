@@ -1,20 +1,20 @@
-"use client";
+'use client';
 
-import React, { useState, useRef, useEffect, useCallback } from "react";
-import { Loader2, AlertCircle, Play, Pause, X, Music, Bot } from "lucide-react";
-import { useHandTracker } from "@/hooks/use-hand-tracker";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { PUNCH_MAP, TARGET_POSITIONS, TARGET_RADIUS } from "@/lib/constants";
-import type { Target, SparringStats, Handedness, ChallengeLevel } from "@/lib/types";
-import { useFirestore, useUser } from "@/firebase";
-import { doc, setDoc, serverTimestamp, collection, addDoc, Firestore, writeBatch, getDoc } from "firebase/firestore";
-import { suggestCombination } from "@/ai/flows/suggest-combination";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useRouter } from "next/navigation";
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { Loader2, AlertCircle, Play, Pause, X, Music, Bot } from 'lucide-react';
+import { useHandTracker } from '@/hooks/use-hand-tracker';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { PUNCH_MAP, TARGET_POSITIONS, TARGET_RADIUS } from '@/lib/constants';
+import type { Target, SparringStats, Handedness, ChallengeLevel } from '@/lib/types';
+import { useFirestore, useUser } from '@/firebase';
+import { doc, setDoc, serverTimestamp, collection, addDoc, Firestore, writeBatch, getDoc } from 'firebase/firestore';
+import { suggestCombination } from '@/ai/flows/suggest-combination';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useRouter } from 'next/navigation';
 
-type SessionState = "idle" | "starting" | "running" | "paused" | "finished" | "error";
+type SessionState = 'idle' | 'starting' | 'running' | 'paused' | 'finished' | 'error';
 
 const initialStats: SparringStats = { score: 0, punches: 0, accuracy: 0, streak: 0, bestStreak: 0, avgSpeed: 0 };
 
@@ -25,20 +25,20 @@ const CHALLENGE_LEVELS: Record<ChallengeLevel, { speed: number; complexity: numb
 };
 
 const MUSIC_TRACKS = [
-    { name: "No Music", src: "none", bpm: 0 },
-    { name: "Mission Ready (120 BPM)", src: "https://files.freemusicarchive.org/storage-freemusicarchive-org/music/cc_by/Ketsa/Raising_Frequecies/Ketsa_-_03_-_Mission_Ready.mp3", bpm: 120 },
-    { name: "The 90s (100 BPM)", src: "https://files.freemusicarchive.org/storage-freemusicarchive-org/music/no_curator/Monk/The_Sagat/Monk_-_09_-_The_90s.mp3", bpm: 100 },
-    { name: "Enthusiast (130 BPM)", src: "https://files.freemusicarchive.org/storage-freemusicarchive-org/music/cc_by/Tours/Enthusiast/Tours_-_01_-_Enthusiast.mp3", bpm: 130 },
+  { name: 'No Music', src: 'none', bpm: 0 },
+  { name: 'Mission Ready', src: 'https://files.freemusicarchive.org/storage-freemusicarchive-org/music/cc_by/Ketsa/Raising_Frequecies/Ketsa_-_03_-_Mission_Ready.mp3', bpm: 120 },
+  { name: 'The 90s', src: 'https://files.freemusicarchive.org/storage-freemusicarchive-org/music/no_curator/Monk/The_Sagat/Monk_-_09_-_The_90s.mp3', bpm: 100 },
+  { name: 'Enthusiast', src: 'https://files.freemusicarchive.org/storage-freemusicarchive-org/music/cc_by/Tours/Enthusiast/Tours_-_01_-_Enthusiast.mp3', bpm: 130 },
 ];
 
 export function SparringSession() {
   const { videoRef, canvasRef, results, loading, error, startTracker, stopTracker } = useHandTracker();
-  const [sessionState, setSessionState] = useState<SessionState>("idle");
+  const [sessionState, setSessionState] = useState<SessionState>('idle');
   const [targets, setTargets] = useState<Target[]>([]);
   const [combinationHistory, setCombinationHistory] = useState<string[]>([]);
   const [sessionStats, setSessionStats] = useState(initialStats);
   const [isFetchingCombo, setIsFetchingCombo] = useState(false);
-  const [challengeLevel, setChallengeLevel] = useState<ChallengeLevel>("Medium");
+  const [challengeLevel, setChallengeLevel] = useState<ChallengeLevel>('Medium');
   const [selectedMusic, setSelectedMusic] = useState(MUSIC_TRACKS[0].src);
 
   const { user, isUserLoading } = useUser();
@@ -54,7 +54,7 @@ export function SparringSession() {
     const musicTrack = MUSIC_TRACKS.find(track => track.src === selectedMusic);
     if (musicTrack && musicTrack.bpm > 0) {
       // 4 beats for a standard measure in most music
-      return (60000 / musicTrack.bpm) * 4; 
+      return (60000 / musicTrack.bpm) * 4;
     }
     return CHALLENGE_LEVELS[challengeLevel].speed;
   }, [selectedMusic, challengeLevel]);
@@ -65,7 +65,7 @@ export function SparringSession() {
     setCombinationHistory([]);
     currentTargetIndex.current = 0;
     if (nextComboTimeout.current) {
-        clearTimeout(nextComboTimeout.current);
+      clearTimeout(nextComboTimeout.current);
     }
   };
 
@@ -75,17 +75,17 @@ export function SparringSession() {
       return;
     }
     resetSession();
-    setSessionState("starting");
+    setSessionState('starting');
     await startTracker();
   };
-  
+
   const handleStop = async () => {
     stopTracker();
-    setSessionState("idle");
+    setSessionState('idle');
 
     if (user && firestore && sessionStats.punches > 0) {
       const batch = writeBatch(firestore);
-      
+
       const resultRef = doc(collection(firestore, `users/${user.uid}/results`));
       batch.set(resultRef, {
         userId: user.uid,
@@ -94,65 +94,78 @@ export function SparringSession() {
       });
 
       const metricsRef = doc(firestore, 'metrics', user.uid);
-      
+
       try {
         const currentMetricsDoc = await getDoc(metricsRef);
-        const currentMetrics = currentMetricsDoc.exists() ? currentMetricsDoc.data() as SparringStats : initialStats;
+        const currentMetrics = currentMetricsDoc.exists() ? (currentMetricsDoc.data() as SparringStats) : initialStats;
 
         const newTotalPunches = currentMetrics.punches + sessionStats.punches;
-        const newAccuracy = newTotalPunches > 0 ? ((currentMetrics.accuracy * currentMetrics.punches) + (sessionStats.accuracy * sessionStats.punches)) / newTotalPunches : 0;
-        const newAvgSpeed = newTotalPunches > 0 ? ((currentMetrics.avgSpeed * currentMetrics.punches) + (sessionStats.avgSpeed * sessionStats.punches)) / newTotalPunches : 0;
+        const newAccuracy =
+          newTotalPunches > 0
+            ? (currentMetrics.accuracy * currentMetrics.punches + sessionStats.accuracy * sessionStats.punches) / newTotalPunches
+            : 0;
+        const newAvgSpeed =
+          newTotalPunches > 0
+            ? (currentMetrics.avgSpeed * currentMetrics.punches + sessionStats.avgSpeed * sessionStats.punches) / newTotalPunches
+            : 0;
 
-        batch.set(metricsRef, {
-          score: (currentMetrics.score || 0) + sessionStats.score,
-          punches: newTotalPunches,
-          bestStreak: Math.max(currentMetrics.bestStreak, sessionStats.bestStreak),
-          accuracy: newAccuracy,
-          avgSpeed: newAvgSpeed,
-        }, { merge: true });
+        batch.set(
+          metricsRef,
+          {
+            score: (currentMetrics.score || 0) + sessionStats.score,
+            punches: newTotalPunches,
+            bestStreak: Math.max(currentMetrics.bestStreak, sessionStats.bestStreak),
+            accuracy: newAccuracy,
+            avgSpeed: newAvgSpeed,
+          },
+          { merge: true }
+        );
 
         await batch.commit();
       } catch (e) {
-        console.error("Error updating metrics:", e);
+        console.error('Error updating metrics:', e);
       }
     }
 
     if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current.currentTime = 0;
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
     }
   };
 
   const handlePause = () => {
     setSessionState(ss => {
-        if (ss === "running") {
-            if (audioRef.current?.src && selectedMusic !== "none") audioRef.current.pause();
-            if(nextComboTimeout.current) clearTimeout(nextComboTimeout.current);
-            return "paused";
-        }
-        if (ss === "paused") {
-            if (audioRef.current?.src && selectedMusic !== "none") audioRef.current.play();
-            scheduleNextCombination(0);
-            return "running";
-        }
-        return ss;
+      if (ss === 'running') {
+        if (audioRef.current?.src && selectedMusic !== 'none') audioRef.current.pause();
+        if (nextComboTimeout.current) clearTimeout(nextComboTimeout.current);
+        return 'paused';
+      }
+      if (ss === 'paused') {
+        if (audioRef.current?.src && selectedMusic !== 'none') audioRef.current.play();
+        scheduleNextCombination(0);
+        return 'running';
+      }
+      return ss;
     });
-  }
+  };
 
   const scheduleNextCombination = (delay: number) => {
     if (nextComboTimeout.current) {
       clearTimeout(nextComboTimeout.current);
     }
     nextComboTimeout.current = setTimeout(() => {
-        fetchNextCombination();
+      fetchNextCombination();
     }, delay);
-  }
+  };
 
   const fetchNextCombination = useCallback(async () => {
     setIsFetchingCombo(true);
     try {
       const { suggestedCombination } = await suggestCombination({ recentCombinations: combinationHistory.slice(-5) });
-      const punchKeys = suggestedCombination.split(/[-,\s]/).filter(p => PUNCH_MAP[p]).slice(0, CHALLENGE_LEVELS[challengeLevel].complexity);
+      const punchKeys = suggestedCombination
+        .split(/[-,\s]/)
+        .filter(p => PUNCH_MAP[p])
+        .slice(0, CHALLENGE_LEVELS[challengeLevel].complexity);
       const newTargets: Target[] = punchKeys.map((key, index) => {
         const punch = PUNCH_MAP[key];
         const position = TARGET_POSITIONS[key];
@@ -170,36 +183,36 @@ export function SparringSession() {
       setCombinationHistory(prev => [...prev, suggestedCombination]);
       currentTargetIndex.current = 0;
     } catch (e) {
-      console.error("Failed to get new combination", e);
-      setSessionState("error");
+      console.error('Failed to get new combination', e);
+      setSessionState('error');
     } finally {
       setIsFetchingCombo(false);
     }
   }, [combinationHistory, challengeLevel]);
 
   useEffect(() => {
-    if (sessionState === "running" && targets.length > 0 && currentTargetIndex.current >= targets.length && !isFetchingCombo) {
-        scheduleNextCombination(getCombinationDelay());
+    if (sessionState === 'running' && targets.length > 0 && currentTargetIndex.current >= targets.length && !isFetchingCombo) {
+      scheduleNextCombination(getCombinationDelay());
     }
   }, [sessionState, targets, isFetchingCombo, fetchNextCombination, getCombinationDelay]);
 
   useEffect(() => {
-    if (sessionState === "running" && targets.length === 0 && !isFetchingCombo) {
-        fetchNextCombination();
+    if (sessionState === 'running' && targets.length === 0 && !isFetchingCombo) {
+      fetchNextCombination();
     }
   }, [sessionState, targets.length, isFetchingCombo, fetchNextCombination]);
-  
+
   useEffect(() => {
-    if(!loading && sessionState === 'starting') {
-        setSessionState('running');
-        if (audioRef.current?.src && selectedMusic !== "none") {
-            audioRef.current.play().catch(e => console.error("Audio play failed:", e));
-        }
+    if (!loading && sessionState === 'starting') {
+      setSessionState('running');
+      if (audioRef.current?.src && selectedMusic !== 'none') {
+        audioRef.current.play().catch(e => console.error('Audio play failed:', e));
+      }
     }
   }, [loading, sessionState, selectedMusic]);
 
   useEffect(() => {
-    if (error) setSessionState("error");
+    if (error) setSessionState('error');
   }, [error]);
 
   const draw = useCallback(() => {
@@ -207,39 +220,39 @@ export function SparringSession() {
     const video = videoRef.current;
     if (!canvas || !video || !results) return;
 
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
-    
+
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    
+
     ctx.save();
     ctx.translate(canvas.width, 0);
     ctx.scale(-1, 1);
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     ctx.restore();
 
-    if (sessionState !== "running") return;
+    if (sessionState !== 'running') return;
 
     const currentTarget = targets[currentTargetIndex.current];
     if (currentTarget) {
       const targetX = currentTarget.x * canvas.width;
       const targetY = currentTarget.y * canvas.height;
-      
+
       ctx.beginPath();
       ctx.arc(targetX, targetY, currentTarget.radius, 0, 2 * Math.PI);
-      ctx.fillStyle = "hsla(var(--accent) / 0.5)";
-      ctx.strokeStyle = "hsl(var(--accent))";
+      ctx.fillStyle = 'hsla(var(--accent) / 0.5)';
+      ctx.strokeStyle = 'hsl(var(--accent))';
       ctx.lineWidth = 4;
       ctx.fill();
       ctx.stroke();
 
-      ctx.fillStyle = "hsl(var(--accent-foreground))";
+      ctx.fillStyle = 'hsl(var(--accent-foreground))';
       ctx.font = `bold ${currentTarget.radius * 0.8}px 'Orbitron', sans-serif`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
       ctx.fillText(currentTarget.label, targetX, targetY);
     }
 
@@ -248,7 +261,7 @@ export function SparringSession() {
         const landmarks = results.landmarks[i];
         const handedness = results.handedness[i]?.[0]?.categoryName as Handedness;
         const wrist = landmarks[0]; // Using the wrist as the hit point
-        
+
         if (wrist && currentTarget && handedness === currentTarget.hand) {
           // Flip the X coordinate for collision detection as the canvas is flipped
           const handX = (1 - wrist.x) * canvas.width;
@@ -261,26 +274,26 @@ export function SparringSession() {
           if (distance < currentTarget.radius) {
             // Debounce hits to avoid multiple registrations for one punch
             const hitTime = Date.now();
-            if (hitTime - lastHitTimestamp.current > 500) { 
+            if (hitTime - lastHitTimestamp.current > 500) {
               lastHitTimestamp.current = hitTime;
-              
+
               setSessionStats(prev => {
                 const newPunches = prev.punches + 1;
                 const newStreak = prev.streak + 1;
                 return {
-                    ...prev,
-                    score: prev.score + 10,
-                    punches: newPunches,
-                    accuracy: ((prev.accuracy * prev.punches + 100) / newPunches),
-                    streak: newStreak,
-                    bestStreak: Math.max(prev.bestStreak, newStreak),
-                }
+                  ...prev,
+                  score: prev.score + 10,
+                  punches: newPunches,
+                  accuracy: (prev.accuracy * prev.punches + 100) / newPunches,
+                  streak: newStreak,
+                  bestStreak: Math.max(prev.bestStreak, newStreak),
+                };
               });
 
               if (currentTargetIndex.current < targets.length - 1) {
                 currentTargetIndex.current++;
               } else {
-                currentTargetIndex.current++; 
+                currentTargetIndex.current++;
                 // Mark combo as finished, schedule the next one
                 scheduleNextCombination(getCombinationDelay());
               }
@@ -290,14 +303,14 @@ export function SparringSession() {
       }
     }
   }, [results, canvasRef, videoRef, sessionState, targets, getCombinationDelay]);
-  
+
   useEffect(() => {
     let animationFrameId: number;
     const animate = () => {
       draw();
       animationFrameId = requestAnimationFrame(animate);
     };
-    if (sessionState === "running" || sessionState === "paused") {
+    if (sessionState === 'running' || sessionState === 'paused') {
       animate();
     }
     return () => {
@@ -307,123 +320,145 @@ export function SparringSession() {
 
   useEffect(() => {
     if (audioRef.current) {
-        audioRef.current.src = selectedMusic !== "none" ? selectedMusic : "";
+      audioRef.current.src = selectedMusic !== 'none' ? selectedMusic : '';
     }
   }, [selectedMusic]);
-  
+
   useEffect(() => {
     // If the user logs out during a session, stop it.
     if (!isUserLoading && !user && sessionState !== 'idle') {
-        handleStop();
-        setSessionState('idle');
+      handleStop();
+      setSessionState('idle');
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isUserLoading, user, sessionState]);
 
-
   const renderContent = () => {
-    if (sessionState === "error") {
+    if (sessionState === 'error') {
       return (
         <Alert variant="destructive" className="max-w-md glass-panel">
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>An Error Occurred</AlertTitle>
-          <AlertDescription>{error || "Something went wrong. Please refresh and try again."}</AlertDescription>
+          <AlertDescription>{error || 'Something went wrong. Please refresh and try again.'}</AlertDescription>
         </Alert>
       );
     }
 
-    if (sessionState === "idle") {
+    if (sessionState === 'idle') {
       return (
         <div className="text-center p-4 max-w-2xl mx-auto">
-            <h1 className="text-4xl font-bold tracking-tight">Ready to Train?</h1>
-            <p className="mt-2 text-lg">Configure your session and get ready to spar with your AI coach. We'll track your hands and give you combinations to throw.</p>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
-              <Card className="glass-panel">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-lg"><Bot className="w-5 h-5"/> Challenge Level</CardTitle>
-                </CardHeader>
-                <CardContent>
-                   <Select onValueChange={(value: ChallengeLevel) => setChallengeLevel(value)} defaultValue={challengeLevel}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select a level" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Easy">Easy</SelectItem>
-                      <SelectItem value="Medium">Medium</SelectItem>
-                      <SelectItem value="Hard">Hard</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </CardContent>
-              </Card>
-               <Card className="glass-panel">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-lg"><Music className="w-5 h-5"/> Music</CardTitle>
-                </CardHeader>
-                <CardContent>
-                   <Select onValueChange={setSelectedMusic} defaultValue={selectedMusic}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select music" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {MUSIC_TRACKS.map(track => (
-                        <SelectItem key={track.src} value={track.src}>{track.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </CardContent>
-              </Card>
-            </div>
+          <h1 className="text-4xl font-bold tracking-tight">Ready to Train?</h1>
+          <p className="mt-2 text-lg">
+            Configure your session and get ready to spar with your AI coach. We'll track your hands and give you combinations to throw.
+          </p>
 
-            <Button size="lg" className="mt-8" onClick={handleStart} disabled={isUserLoading} variant="destructive">
-                {isUserLoading ? <Loader2 className="animate-spin" /> : (user ? "Start Session" : "Login to Start")}
-            </Button>
-            <audio ref={audioRef} loop />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
+            <Card className="glass-panel">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <Bot className="w-5 h-5" /> Challenge Level
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Select onValueChange={(value: ChallengeLevel) => setChallengeLevel(value)} defaultValue={challengeLevel}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a level" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Easy">Easy</SelectItem>
+                    <SelectItem value="Medium">Medium</SelectItem>
+                    <SelectItem value="Hard">Hard</SelectItem>
+                  </SelectContent>
+                </Select>
+              </CardContent>
+            </Card>
+            <Card className="glass-panel">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <Music className="w-5 h-5" /> Music
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Select onValueChange={setSelectedMusic} defaultValue={selectedMusic}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select music" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {MUSIC_TRACKS.map(track => (
+                      <SelectItem key={track.src} value={track.src}>
+                        {track.name} ({track.bpm > 0 ? `${track.bpm} BPM` : 'Off'})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </CardContent>
+            </Card>
+          </div>
+
+          <Button size="lg" className="mt-8" onClick={handleStart} disabled={isUserLoading} variant="destructive">
+            {isUserLoading ? <Loader2 className="animate-spin" /> : user ? 'Start Session' : 'Login to Start'}
+          </Button>
+          <audio ref={audioRef} loop />
         </div>
       );
     }
-    
+
     return (
-        <div className="w-full h-full flex flex-col items-center justify-center bg-black/50">
-            <div className="relative w-full h-full">
-                {(sessionState === "starting" || loading) && (
-                    <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center z-20">
-                        <Loader2 className="w-16 h-16 animate-spin text-primary" />
-                        <p className="text-primary-foreground mt-4 text-lg">Starting camera & loading AI model...</p>
-                    </div>
-                )}
-                <video ref={videoRef} className="absolute inset-0 w-full h-full object-cover" style={{ display: 'none' }} playsInline />
-                <canvas ref={canvasRef} className="absolute inset-0 w-full h-full object-cover" />
-                <div className="absolute top-4 left-4 z-10 flex gap-2">
-                    <Button size="icon" onClick={handleStop} variant="destructive">
-                        <X />
-                    </Button>
-                    <Button size="icon" onClick={handlePause}>
-                        {sessionState === 'paused' ? <Play/> : <Pause/>}
-                    </Button>
-                </div>
-                 <div className="absolute bottom-4 left-4 right-4 z-10">
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full max-w-4xl mx-auto">
-                        <Card className="glass-panel">
-                            <CardHeader className="p-2 md:p-4"><CardTitle className="text-sm md:text-base">Score</CardTitle></CardHeader>
-                            <CardContent className="p-2 md:p-4"><p className="text-xl md:text-3xl font-bold">{sessionStats.score}</p></CardContent>
-                        </Card>
-                        <Card className="glass-panel">
-                            <CardHeader className="p-2 md:p-4"><CardTitle className="text-sm md:text-base">Punches</CardTitle></CardHeader>
-                            <CardContent className="p-2 md:p-4"><p className="text-xl md:text-3xl font-bold">{sessionStats.punches}</p></CardContent>
-                        </Card>
-                        <Card className="glass-panel">
-                            <CardHeader className="p-2 md:p-4"><CardTitle className="text-sm md:text-base">Streak</CardTitle></CardHeader>
-                            <CardContent className="p-2 md:p-4"><p className="text-xl md:text-3xl font-bold">{sessionStats.streak}</p></CardContent>
-                        </Card>
-                        <Card className="glass-panel">
-                            <CardHeader className="p-2 md:p-4"><CardTitle className="text-sm md:text-base">Accuracy</CardTitle></CardHeader>
-                            <CardContent className="p-2 md:p-4"><p className="text-xl md:text-3xl font-bold">{sessionStats.accuracy.toFixed(1)}%</p></CardContent>
-                        </Card>
-                    </div>
-                </div>
+      <div className="w-full h-full flex flex-col items-center justify-center bg-black/50">
+        <div className="relative w-full h-full">
+          {sessionState === 'starting' ||
+            (loading && <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center z-20">
+                <Loader2 className="w-16 h-16 animate-spin text-primary" />
+                <p className="text-primary-foreground mt-4 text-lg">Starting camera & loading AI model...</p>
+              </div>)}
+          <video ref={videoRef} className="absolute inset-0 w-full h-full object-cover" style={{ display: 'none' }} playsInline />
+          <canvas ref={canvasRef} className="absolute inset-0 w-full h-full object-cover" />
+          <div className="absolute top-4 left-4 z-10 flex gap-2">
+            <Button size="icon" onClick={handleStop} variant="destructive">
+              <X />
+            </Button>
+            <Button size="icon" onClick={handlePause}>
+              {sessionState === 'paused' ? <Play /> : <Pause />}
+            </Button>
+          </div>
+          <div className="absolute bottom-4 left-4 right-4 z-10">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full max-w-4xl mx-auto">
+              <Card className="glass-panel">
+                <CardHeader className="p-2 md:p-4">
+                  <CardTitle className="text-sm md:text-base">Score</CardTitle>
+                </CardHeader>
+                <CardContent className="p-2 md:p-4">
+                  <p className="text-xl md:text-3xl font-bold">{sessionStats.score}</p>
+                </CardContent>
+              </Card>
+              <Card className="glass-panel">
+                <CardHeader className="p-2 md:p-4">
+                  <CardTitle className="text-sm md:text-base">Punches</CardTitle>
+                </CardHeader>
+                <CardContent className="p-2 md:p-4">
+                  <p className="text-xl md:text-3xl font-bold">{sessionStats.punches}</p>
+                </CardContent>
+              </Card>
+              <Card className="glass-panel">
+                <CardHeader className="p-2 md:p-4">
+                  <CardTitle className="text-sm md:text-base">Streak</CardTitle>
+                </CardHeader>
+                <CardContent className="p-2 md:p-4">
+                  <p className="text-xl md:text-3xl font-bold">{sessionStats.streak}</p>
+                </CardContent>
+              </Card>
+              <Card className="glass-panel">
+                <CardHeader className="p-2 md:p-4">
+                  <CardTitle className="text-sm md:text-base">Accuracy</CardTitle>
+                </CardHeader>
+                <CardContent className="p-2 md:p-4">
+                  <p className="text-xl md:text-3xl font-bold">{sessionStats.accuracy.toFixed(1)}%</p>
+                </CardContent>
+              </Card>
             </div>
+          </div>
         </div>
+      </div>
     );
   };
 
