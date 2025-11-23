@@ -23,7 +23,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <header className="sticky top-0 z-10 flex h-14 items-center justify-between border-b bg-transparent px-4 sm:px-6">
         <Link href="/" className="flex items-center gap-2 font-semibold">
           <Logo className="h-6 w-6" />
-          <span className="hidden sm:inline-block">Digital Spar</span>
+          <span className="hidden sm:inline-block">BPMsparring</span>
         </Link>
         <div>
           {!isUserLoading && (

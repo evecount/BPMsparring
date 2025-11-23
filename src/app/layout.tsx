@@ -5,7 +5,7 @@ import { AppShell } from '@/components/app-shell';
 import { FirebaseClientProvider } from '@/firebase';
 
 export const metadata: Metadata = {
-  title: 'Digital Spar',
+  title: 'BPMsparring',
   description: 'An AI-powered boxing coach to improve your skills.',
 };
 
