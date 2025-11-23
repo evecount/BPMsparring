@@ -21,12 +21,7 @@ export default function RootLayout({
         <link href="https://fonts.googleapis.com/css2?family=Inter&display=swap" rel="stylesheet" />
       </head>
       <body className="font-body antialiased">
-        <div className="md:hidden">
-          <AppShell>{children}</AppShell>
-        </div>
-        <div className="hidden md:block">
-           <AppShell>{children}</AppShell>
-        </div>
+        <AppShell>{children}</AppShell>
         <Toaster />
       </body>
     </html>
