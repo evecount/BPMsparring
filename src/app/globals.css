@@ -73,10 +73,8 @@ body {
   body {
     @apply bg-background text-foreground;
     text-shadow:
-      0 0 5px hsl(var(--foreground)),
-      0 0 10px hsl(var(--foreground)),
-      0 0 20px hsl(var(--accent)),
-      0 0 40px hsl(var(--accent));
+      0 0 2px hsl(var(--foreground)),
+      0 0 8px hsl(var(--accent));
   }
 }
 
