@@ -15,12 +15,12 @@ import { suggestCombination } from '@/ai/flows/suggest-combination';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useRouter } from 'next/navigation';
 import { MUSIC_TRACKS } from '@/lib/beat-maps';
+import { Textarea } from '@/components/ui/textarea';
 
-type SessionState = 'idle' | 'starting' | 'running' | 'paused' | 'finished' | 'error';
+type SessionState = 'idle' | 'starting' | 'running' | 'paused' | 'error';
 
 const initialStats: SparringStats = { score: 0, punches: 0, accuracy: 0, streak: 0, bestStreak: 0, avgSpeed: 0 };
 
-// Define challenge levels with specific properties for AI mode
 const CHALLENGE_LEVELS = {
   Easy: { complexity: 2 },
   Medium: { complexity: 4 },
@@ -36,6 +36,7 @@ export function SparringSession() {
   const [isFetchingCombo, setIsFetchingCombo] = useState(false);
   const [challengeLevel, setChallengeLevel] = useState<ChallengeLevel>('Medium');
   const [selectedMusic, setSelectedMusic] = useState(MUSIC_TRACKS[0]);
+  const [customPrompt, setCustomPrompt] = useState('');
 
   const { user, isUserLoading } = useUser();
   const firestore = useFirestore() as Firestore;
@@ -45,10 +46,8 @@ export function SparringSession() {
   const audioRef = useRef<HTMLAudioElement>(null);
   const gameLoopRef = useRef<number>();
   
-  // Beatmap / Choreography specific refs
   const nextPunchIndexRef = useRef(0);
 
-  // AI-mode specific refs
   const nextComboTimeout = useRef<NodeJS.Timeout | null>(null);
   const currentTargetIndex = useRef(0);
 
@@ -158,7 +157,7 @@ export function SparringSession() {
     if (isFetchingCombo || selectedMusic.punches.length > 0) return;
     setIsFetchingCombo(true);
     try {
-      const { suggestedCombination } = await suggestCombination({ recentCombinations: combinationHistory.slice(-5) });
+      const { suggestedCombination } = await suggestCombination({ recentCombinations: combinationHistory.slice(-5), customPrompt: customPrompt });
       const punchKeys = suggestedCombination
         .split(/[-,\s]/)
         .filter(p => PUNCH_MAP[p])
@@ -186,7 +185,7 @@ export function SparringSession() {
     } finally {
       setIsFetchingCombo(false);
     }
-  }, [combinationHistory, challengeLevel, isFetchingCombo, selectedMusic]);
+  }, [combinationHistory, challengeLevel, isFetchingCombo, selectedMusic, customPrompt]);
 
   const gameLoop = useCallback(() => {
     const isChoreographed = selectedMusic.punches.length > 0;
@@ -216,7 +215,7 @@ export function SparringSession() {
             label: punchKey,
             hit: false,
           };
-          setTargets(prev => [...prev, newTarget]);
+          setTargets(prev => [...prev.filter(t => !t.hit), newTarget]); // Clear old targets and add new
         }
         nextPunchIndexRef.current++;
         nextPunch = punches[nextPunchIndexRef.current];
@@ -304,7 +303,10 @@ export function SparringSession() {
                   setSessionStats(prev => {
                     const newPunches = prev.punches + 1;
                     const newStreak = prev.streak + 1;
-                    return { ...prev, score: prev.score + 10, punches: newPunches, accuracy: (prev.accuracy * prev.punches + 100) / newPunches, streak: newStreak, bestStreak: Math.max(prev.bestStreak, newStreak) };
+                    const totalPunchesForAcc = prev.punches;
+                    const newAccuracy = totalPunchesForAcc > 0 ? (prev.accuracy * (totalPunchesForAcc -1) + 100) / totalPunchesForAcc : 100;
+
+                    return { ...prev, score: prev.score + 10, punches: newPunches, accuracy: newAccuracy, streak: newStreak, bestStreak: Math.max(prev.bestStreak, newStreak) };
                   });
 
                   if (selectedMusic.punches.length > 0) {
@@ -431,6 +433,22 @@ export function SparringSession() {
               </CardContent>
             </Card>
           </div>
+          <div className="w-full mt-6">
+            <Card className="glass-panel">
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-lg">
+                        <Bot className="w-5 h-5" /> Custom AI Prompt
+                    </CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <Textarea 
+                        placeholder="e.g., 'Suggest combinations that focus on footwork' or 'Give me combos for a southpaw'"
+                        value={customPrompt}
+                        onChange={(e) => setCustomPrompt(e.target.value)}
+                    />
+                </CardContent>
+            </Card>
+          </div>
 
           <Button size="lg" className="mt-8" onClick={handleStart} disabled={isUserLoading} variant="destructive">
             {isUserLoading ? <Loader2 className="animate-spin" /> : user ? 'Start Session' : 'Login to Start'}
@@ -489,7 +507,7 @@ export function SparringSession() {
                 <CardHeader className="p-2 md:p-4">
                   <CardTitle className="text-sm md:text-base">Accuracy</CardTitle>
                 </CardHeader>
-                <CardContent className="p-2 md:p-4">
+                <CardContent className="p-2 md-p-4">
                   <p className="text-xl md:text-3xl font-bold">{sessionStats.accuracy.toFixed(1)}%</p>
                 </CardContent>
               </Card>
@@ -499,8 +517,6 @@ export function SparringSession() {
       </div>
     );
   };
-
+  
   return renderContent();
 }
-
-    

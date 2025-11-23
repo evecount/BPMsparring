@@ -1,3 +1,4 @@
+
 'use server';
 
 /**
@@ -15,6 +16,10 @@ const SuggestCombinationInputSchema = z.object({
   recentCombinations: z
     .array(z.string())
     .describe('The list of recent boxing combinations thrown by the user.'),
+  customPrompt: z
+    .string()
+    .optional()
+    .describe('A custom prompt from the user to guide the combination suggestion.'),
 });
 export type SuggestCombinationInput = z.infer<typeof SuggestCombinationInputSchema>;
 
@@ -33,11 +38,16 @@ const prompt = ai.definePrompt({
   name: 'suggestCombinationPrompt',
   input: {schema: SuggestCombinationInputSchema},
   output: {schema: SuggestCombinationOutputSchema},
-  prompt: `Given the user's recent boxing combinations, suggest a new combination that introduces variety and targets potential weaknesses.
+  prompt: `You are an expert boxing coach. Given the user's recent boxing combinations, suggest a new combination that introduces variety and targets potential weaknesses. The combination should be a string of numbers from 1-6, separated by spaces or hyphens (e.g., "1-2-3" or "1 2 3").
 
 Recent Combinations: {{#each recentCombinations}}{{{this}}}, {{/each}}
 
-Suggest a new combination:`,
+{{#if customPrompt}}
+User's Request: {{{customPrompt}}}
+Based on the user's request, suggest a relevant combination.
+{{else}}
+Suggest a new combination based on the recent history.
+{{/if}}`,
 });
 
 const suggestCombinationFlow = ai.defineFlow(
