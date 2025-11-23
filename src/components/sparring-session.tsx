@@ -38,7 +38,7 @@ export function SparringSession() {
   const [selectedMusic, setSelectedMusic] = useState(MUSIC_TRACKS[0]);
   const [customPrompt, setCustomPrompt] = useState('');
 
-  const { user, isUserLoading } = useUser();
+  const { user } = useUser();
   const firestore = useFirestore() as Firestore;
   const router = useRouter();
 
@@ -360,14 +360,6 @@ export function SparringSession() {
     if(track) setSelectedMusic(track);
   };
 
-  useEffect(() => {
-    if (!isUserLoading && !user && sessionState !== 'idle') {
-      handleStop();
-      setSessionState('idle');
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isUserLoading, user, sessionState]);
-
   const renderContent = () => {
     if (sessionState === 'error') {
       return (
@@ -446,8 +438,8 @@ export function SparringSession() {
             </Card>
           </div>
 
-          <Button size="lg" className="mt-8" onClick={handleStart} disabled={isUserLoading} variant="destructive">
-            {isUserLoading ? <Loader2 className="animate-spin" /> : 'Start Session'}
+          <Button size="lg" className="mt-8" onClick={handleStart} variant="destructive">
+            Start Session
           </Button>
           <audio ref={audioRef} />
         </div>
@@ -502,7 +494,7 @@ export function SparringSession() {
               <Card className="glass-panel">
                 <CardHeader className="p-2 md:p-4">
                   <CardTitle className="text-sm md:text-base">Accuracy</CardTitle>
-                </CardHeader>
+                </Header>
                 <CardContent className="p-2 md-p-4">
                   <p className="text-xl md:text-3xl font-bold">{sessionStats.accuracy.toFixed(1)}%</p>
                 </CardContent>
@@ -516,3 +508,5 @@ export function SparringSession() {
   
   return renderContent();
 }
+
+    
