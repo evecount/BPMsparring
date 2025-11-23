@@ -64,10 +64,6 @@ export function SparringSession() {
   };
 
   const handleStart = async () => {
-    if (!user) {
-      router.push('/login');
-      return;
-    }
     resetSession();
     setSessionState('starting');
     await startTracker();
@@ -451,7 +447,7 @@ export function SparringSession() {
           </div>
 
           <Button size="lg" className="mt-8" onClick={handleStart} disabled={isUserLoading} variant="destructive">
-            {isUserLoading ? <Loader2 className="animate-spin" /> : user ? 'Start Session' : 'Login to Start'}
+            {isUserLoading ? <Loader2 className="animate-spin" /> : 'Start Session'}
           </Button>
           <audio ref={audioRef} />
         </div>
@@ -520,5 +516,3 @@ export function SparringSession() {
   
   return renderContent();
 }
-
-    
