@@ -26,3 +26,16 @@ export type Punch = {
 };
 
 export type ChallengeLevel = "Easy" | "Medium" | "Hard";
+
+export type ChoreographedPunch = {
+  beat: number;
+  type: string; // Corresponds to a key in PUNCH_MAP
+};
+
+export type BeatMap = {
+  name: string;
+  src: string;
+  bpm: number;
+  offset: number; // Seconds before the first beat
+  punches: ChoreographedPunch[];
+};
