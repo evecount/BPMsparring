@@ -91,7 +91,7 @@ export default function LoginPage() {
     <div className="flex-1 flex items-center justify-center p-4">
       <FormProvider {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)}>
-          <Card className="w-full max-w-sm">
+          <Card className="w-full max-w-sm glass-panel">
             <CardHeader>
               <CardTitle>Login or Sign Up</CardTitle>
               <CardDescription>Enter your details below or sign in anonymously.</CardDescription>
@@ -125,7 +125,7 @@ export default function LoginPage() {
               />
             </CardContent>
             <CardFooter className="flex flex-col gap-4">
-              <Button type="submit" className="w-full">Sign In / Sign Up</Button>
+              <Button type="submit" className="w-full" variant="destructive">Sign In / Sign Up</Button>
               <Button type="button" variant="secondary" className="w-full" onClick={handleAnonymousSignIn}>
                 Continue Anonymously
               </Button>

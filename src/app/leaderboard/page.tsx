@@ -4,7 +4,7 @@ import { LeaderboardTable } from "@/components/leaderboard-table";
 export default function LeaderboardPage() {
   return (
     <div className="flex-1 p-4 md:p-8">
-      <Card>
+      <Card className="glass-panel">
         <CardHeader>
           <CardTitle>Leaderboard</CardTitle>
           <CardDescription>

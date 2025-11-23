@@ -57,7 +57,7 @@ export function LeaderboardTable() {
                 )}
                 <AvatarFallback>U</AvatarFallback>
               </Avatar>
-              <span className="font-medium">{user?.displayName || user?.email || 'You'}</span>
+              <span className="font-medium">{user?.displayName || user?.email?.split('@')[0] || 'You'}</span>
             </div>
           </TableCell>
           <TableCell className="text-right">{displayStats.score.toLocaleString()}</TableCell>

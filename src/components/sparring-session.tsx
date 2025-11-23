@@ -235,7 +235,7 @@ export function SparringSession() {
       ctx.stroke();
 
       ctx.fillStyle = "hsl(var(--accent-foreground))";
-      ctx.font = `bold ${currentTarget.radius * 0.8}px 'Inter', sans-serif`;
+      ctx.font = `bold ${currentTarget.radius * 0.8}px 'Orbitron', sans-serif`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText(currentTarget.label, targetX, targetY);
@@ -317,7 +317,7 @@ export function SparringSession() {
   const renderContent = () => {
     if (sessionState === "error") {
       return (
-        <Alert variant="destructive" className="max-w-md">
+        <Alert variant="destructive" className="max-w-md glass-panel">
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>An Error Occurred</AlertTitle>
           <AlertDescription>{error || "Something went wrong. Please refresh and try again."}</AlertDescription>
@@ -332,7 +332,7 @@ export function SparringSession() {
             <p className="text-muted-foreground mt-2">Configure your session and get ready to spar with your AI coach. We'll track your hands and give you combinations to throw.</p>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
-              <Card>
+              <Card className="glass-panel">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-lg"><Bot className="w-5 h-5"/> Challenge Level</CardTitle>
                 </CardHeader>
@@ -349,7 +349,7 @@ export function SparringSession() {
                   </Select>
                 </CardContent>
               </Card>
-               <Card>
+               <Card className="glass-panel">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-lg"><Music className="w-5 h-5"/> Music</CardTitle>
                 </CardHeader>
@@ -368,7 +368,7 @@ export function SparringSession() {
               </Card>
             </div>
 
-            <Button size="lg" className="mt-8" onClick={handleStart} disabled={isUserLoading}>
+            <Button size="lg" className="mt-8" onClick={handleStart} disabled={isUserLoading} variant="destructive">
                 {isUserLoading ? <Loader2 className="animate-spin" /> : (user ? "Start Session" : "Login to Start")}
             </Button>
             <audio ref={audioRef} loop />
@@ -377,11 +377,11 @@ export function SparringSession() {
     }
     
     return (
-        <div className="w-full h-full flex flex-col items-center justify-center bg-black">
+        <div className="w-full h-full flex flex-col items-center justify-center bg-black/50">
             <div className="relative w-full h-full">
                 {(sessionState === "starting" || loading) && (
-                    <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center z-20">
-                        <Loader2 className="w-16 h-16 animate-spin text-primary-foreground" />
+                    <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center z-20">
+                        <Loader2 className="w-16 h-16 animate-spin text-primary" />
                         <p className="text-primary-foreground mt-4 text-lg">Starting camera & loading AI model...</p>
                     </div>
                 )}
@@ -397,19 +397,19 @@ export function SparringSession() {
                 </div>
                  <div className="absolute bottom-4 left-4 right-4 z-10">
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full max-w-4xl mx-auto">
-                        <Card className="bg-black/50 text-white">
+                        <Card className="glass-panel">
                             <CardHeader className="p-2 md:p-4"><CardTitle className="text-sm md:text-base">Score</CardTitle></CardHeader>
                             <CardContent className="p-2 md:p-4"><p className="text-xl md:text-3xl font-bold">{sessionStats.score}</p></CardContent>
                         </Card>
-                        <Card className="bg-black/50 text-white">
+                        <Card className="glass-panel">
                             <CardHeader className="p-2 md:p-4"><CardTitle className="text-sm md:text-base">Punches</CardTitle></CardHeader>
                             <CardContent className="p-2 md:p-4"><p className="text-xl md:text-3xl font-bold">{sessionStats.punches}</p></CardContent>
                         </Card>
-                        <Card className="bg-black/50 text-white">
+                        <Card className="glass-panel">
                             <CardHeader className="p-2 md:p-4"><CardTitle className="text-sm md:text-base">Streak</CardTitle></CardHeader>
                             <CardContent className="p-2 md:p-4"><p className="text-xl md:text-3xl font-bold">{sessionStats.streak}</p></CardContent>
                         </Card>
-                        <Card className="bg-black/50 text-white">
+                        <Card className="glass-panel">
                             <CardHeader className="p-2 md:p-4"><CardTitle className="text-sm md:text-base">Accuracy</CardTitle></CardHeader>
                             <CardContent className="p-2 md:p-4"><p className="text-xl md:text-3xl font-bold">{sessionStats.accuracy.toFixed(1)}%</p></CardContent>
                         </Card>
