@@ -52,7 +52,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </header>
       <main className="flex-1 flex flex-col">{children}</main>
-      <nav className="sticky bottom-0 z-10 flex items-center justify-center gap-4 border-t bg-black/50 backdrop-blur-sm p-2">
+      <nav className="sticky bottom-0 z-10 flex items-center justify-center gap-4 glass-panel p-2">
         <Link
           href="/"
           className={cn(
