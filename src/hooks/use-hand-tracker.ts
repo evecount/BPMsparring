@@ -44,6 +44,7 @@ export function useHandTracker() {
     return () => {
       stopTracker();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [createHandLandmarker]);
 
   const predictWebcam = useCallback(() => {
@@ -52,9 +53,14 @@ export function useHandTracker() {
     }
     
     const video = videoRef.current;
-    if (video.currentTime === video.dataset.lastTime) {
-      animationFrameId = requestAnimationFrame(predictWebcam);
-      return;
+    if (video.readyState < 2) { // Ensure video is ready to play
+        animationFrameId = requestAnimationFrame(predictWebcam);
+        return;
+    }
+
+    if (video.currentTime === (video.dataset.lastTime ? parseFloat(video.dataset.lastTime) : 0)) {
+        animationFrameId = requestAnimationFrame(predictWebcam);
+        return;
     }
     video.dataset.lastTime = video.currentTime.toString();
 
@@ -67,21 +73,21 @@ export function useHandTracker() {
   const startTracker = useCallback(async () => {
     if (isRunning.current) return;
     if (!handLandmarker) {
+      setLoading(true);
       await createHandLandmarker();
       if (!handLandmarker) {
          setError("Hand tracking model could not be initialized.");
+         setLoading(false);
          return;
       }
     }
     
-    setLoading(true);
-
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       setError("Camera access is not supported by your browser.");
-      setLoading(false);
       return;
     }
     
+    setLoading(true);
     try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 } });
         if (videoRef.current) {

@@ -8,11 +8,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { PUNCH_MAP, TARGET_POSITIONS, TARGET_RADIUS } from "@/lib/constants";
 import type { Target, SparringStats, Handedness, ChallengeLevel } from "@/lib/types";
-import { useFirestore, useUser, useMemoFirebase } from "@/firebase";
-import { doc, setDoc, serverTimestamp, collection, addDoc, Firestore, writeBatch } from "firebase/firestore";
+import { useFirestore, useUser } from "@/firebase";
+import { doc, setDoc, serverTimestamp, collection, addDoc, Firestore, writeBatch, getDoc } from "firebase/firestore";
 import { suggestCombination } from "@/ai/flows/suggest-combination";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { setDocumentNonBlocking } from "@/firebase/non-blocking-updates";
 import { useRouter } from "next/navigation";
 
 type SessionState = "idle" | "starting" | "running" | "paused" | "finished" | "error";
@@ -27,9 +26,9 @@ const CHALLENGE_LEVELS: Record<ChallengeLevel, { speed: number; complexity: numb
 
 const MUSIC_TRACKS = [
     { name: "No Music", src: "none", bpm: 0 },
-    { name: "Mission Ready", src: "https://files.freemusicarchive.org/storage-freemusicarchive-org/music/cc_by/Ketsa/Raising_Frequecies/Ketsa_-_03_-_Mission_Ready.mp3", bpm: 120 },
-    { name: "The 90s", src: "https://files.freemusicarchive.org/storage-freemusicarchive-org/music/no_curator/Monk/The_Sagat/Monk_-_09_-_The_90s.mp3", bpm: 100 },
-    { name: "Enthusiast", src: "https://files.freemusicarchive.org/storage-freemusicarchive-org/music/cc_by/Tours/Enthusiast/Tours_-_01_-_Enthusiast.mp3", bpm: 130 },
+    { name: "Mission Ready (120 BPM)", src: "https://files.freemusicarchive.org/storage-freemusicarchive-org/music/cc_by/Ketsa/Raising_Frequecies/Ketsa_-_03_-_Mission_Ready.mp3", bpm: 120 },
+    { name: "The 90s (100 BPM)", src: "https://files.freemusicarchive.org/storage-freemusicarchive-org/music/no_curator/Monk/The_Sagat/Monk_-_09_-_The_90s.mp3", bpm: 100 },
+    { name: "Enthusiast (130 BPM)", src: "https://files.freemusicarchive.org/storage-freemusicarchive-org/music/cc_by/Tours/Enthusiast/Tours_-_01_-_Enthusiast.mp3", bpm: 130 },
 ];
 
 export function SparringSession() {
@@ -54,7 +53,8 @@ export function SparringSession() {
   const getCombinationDelay = useCallback(() => {
     const musicTrack = MUSIC_TRACKS.find(track => track.src === selectedMusic);
     if (musicTrack && musicTrack.bpm > 0) {
-      return (60000 / musicTrack.bpm) * 4;
+      // 4 beats for a standard measure in most music
+      return (60000 / musicTrack.bpm) * 4; 
     }
     return CHALLENGE_LEVELS[challengeLevel].speed;
   }, [selectedMusic, challengeLevel]);
@@ -83,7 +83,7 @@ export function SparringSession() {
     stopTracker();
     setSessionState("idle");
 
-    if (user && sessionStats.punches > 0) {
+    if (user && firestore && sessionStats.punches > 0) {
       const batch = writeBatch(firestore);
       
       const resultRef = doc(collection(firestore, `users/${user.uid}/results`));
@@ -94,25 +94,27 @@ export function SparringSession() {
       });
 
       const metricsRef = doc(firestore, 'metrics', user.uid);
-      // Not using non-blocking here as we are in a batch
-      // This part would ideally be a cloud function for aggregation
-      // For now, we do it client-side
-      const currentMetricsDoc = await (await import('firebase/firestore')).getDoc(metricsRef);
-      const currentMetrics = currentMetricsDoc.data() as SparringStats || initialStats;
+      
+      try {
+        const currentMetricsDoc = await getDoc(metricsRef);
+        const currentMetrics = currentMetricsDoc.exists() ? currentMetricsDoc.data() as SparringStats : initialStats;
 
-      const newTotalPunches = currentMetrics.punches + sessionStats.punches;
-      const newAccuracy = newTotalPunches > 0 ? ((currentMetrics.accuracy * currentMetrics.punches) + (sessionStats.accuracy * sessionStats.punches)) / newTotalPunches : 0;
-      const newAvgSpeed = newTotalPunches > 0 ? ((currentMetrics.avgSpeed * currentMetrics.punches) + (sessionStats.avgSpeed * sessionStats.punches)) / newTotalPunches : 0;
+        const newTotalPunches = currentMetrics.punches + sessionStats.punches;
+        const newAccuracy = newTotalPunches > 0 ? ((currentMetrics.accuracy * currentMetrics.punches) + (sessionStats.accuracy * sessionStats.punches)) / newTotalPunches : 0;
+        const newAvgSpeed = newTotalPunches > 0 ? ((currentMetrics.avgSpeed * currentMetrics.punches) + (sessionStats.avgSpeed * sessionStats.punches)) / newTotalPunches : 0;
 
-      batch.set(metricsRef, {
-        score: currentMetrics.score + sessionStats.score,
-        punches: newTotalPunches,
-        bestStreak: Math.max(currentMetrics.bestStreak, sessionStats.bestStreak),
-        accuracy: newAccuracy,
-        avgSpeed: newAvgSpeed,
-      }, { merge: true });
+        batch.set(metricsRef, {
+          score: (currentMetrics.score || 0) + sessionStats.score,
+          punches: newTotalPunches,
+          bestStreak: Math.max(currentMetrics.bestStreak, sessionStats.bestStreak),
+          accuracy: newAccuracy,
+          avgSpeed: newAvgSpeed,
+        }, { merge: true });
 
-      await batch.commit();
+        await batch.commit();
+      } catch (e) {
+        console.error("Error updating metrics:", e);
+      }
     }
 
     if (audioRef.current) {
@@ -191,7 +193,7 @@ export function SparringSession() {
     if(!loading && sessionState === 'starting') {
         setSessionState('running');
         if (audioRef.current?.src && selectedMusic !== "none") {
-            audioRef.current.play();
+            audioRef.current.play().catch(e => console.error("Audio play failed:", e));
         }
     }
   }, [loading, sessionState, selectedMusic]);
@@ -245,9 +247,10 @@ export function SparringSession() {
       for (let i = 0; i < results.landmarks.length; i++) {
         const landmarks = results.landmarks[i];
         const handedness = results.handedness[i]?.[0]?.categoryName as Handedness;
-        const wrist = landmarks[0];
+        const wrist = landmarks[0]; // Using the wrist as the hit point
         
         if (wrist && currentTarget && handedness === currentTarget.hand) {
+          // Flip the X coordinate for collision detection as the canvas is flipped
           const handX = (1 - wrist.x) * canvas.width;
           const handY = wrist.y * canvas.height;
           const targetX = currentTarget.x * canvas.width;
@@ -256,6 +259,7 @@ export function SparringSession() {
           const distance = Math.sqrt(Math.pow(handX - targetX, 2) + Math.pow(handY - targetY, 2));
 
           if (distance < currentTarget.radius) {
+            // Debounce hits to avoid multiple registrations for one punch
             const hitTime = Date.now();
             if (hitTime - lastHitTimestamp.current > 500) { 
               lastHitTimestamp.current = hitTime;
@@ -277,6 +281,7 @@ export function SparringSession() {
                 currentTargetIndex.current++;
               } else {
                 currentTargetIndex.current++; 
+                // Mark combo as finished, schedule the next one
                 scheduleNextCombination(getCombinationDelay());
               }
             }
@@ -307,10 +312,12 @@ export function SparringSession() {
   }, [selectedMusic]);
   
   useEffect(() => {
+    // If the user logs out during a session, stop it.
     if (!isUserLoading && !user && sessionState !== 'idle') {
         handleStop();
         setSessionState('idle');
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isUserLoading, user, sessionState]);
 
 
@@ -360,7 +367,7 @@ export function SparringSession() {
                     </SelectTrigger>
                     <SelectContent>
                       {MUSIC_TRACKS.map(track => (
-                        <SelectItem key={track.src} value={track.src}>{track.name}{track.bpm > 0 && ` (${track.bpm} BPM)`}</SelectItem>
+                        <SelectItem key={track.src} value={track.src}>{track.name}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>

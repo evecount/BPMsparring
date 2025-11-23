@@ -13,8 +13,8 @@ export const TARGET_RADIUS = 60; // in pixels
 
 // Positions as percentages of canvas width/height
 export const TARGET_POSITIONS: { [key: string]: { x: number; y: number } } = {
-  '1': { x: 0.6, y: 0.4 },   // Jab
-  '2': { x: 0.4, y: 0.4 },   // Cross
+  '1': { x: 0.6, y: 0.4 },   // Jab (Right side of screen for left hand)
+  '2': { x: 0.4, y: 0.4 },   // Cross (Left side of screen for right hand)
   '3': { x: 0.75, y: 0.5 },  // Left Hook
   '4': { x: 0.25, y: 0.5 },  // Right Hook
   '5': { x: 0.55, y: 0.65 }, // Left Uppercut

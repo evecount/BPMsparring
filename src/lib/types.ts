@@ -26,5 +26,3 @@ export type Punch = {
 };
 
 export type ChallengeLevel = "Easy" | "Medium" | "Hard";
-
-    
