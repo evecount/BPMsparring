@@ -22,9 +22,9 @@ const initialStats: SparringStats = { score: 0, punches: 0, accuracy: 0, streak:
 
 // Define challenge levels with specific properties for AI mode
 const CHALLENGE_LEVELS = {
-  Easy: { complexity: 2, speed: 2000 },
-  Medium: { complexity: 4, speed: 1500 },
-  Hard: { complexity: 6, speed: 1000 },
+  Easy: { complexity: 2 },
+  Medium: { complexity: 4 },
+  Hard: { complexity: 6 },
 };
 
 export function SparringSession() {
@@ -385,7 +385,7 @@ export function SparringSession() {
       return (
         <div className="text-center p-4 max-w-2xl mx-auto">
           <h1 className="text-4xl font-bold tracking-tight">Ready to Train?</h1>
-          <p className="mt-2 text-lg">
+          <p className="mt-2 text-lg text-foreground">
             Configure your session and get ready to spar with your AI coach. We'll track your hands and give you combinations to throw.
           </p>
 
