@@ -1,17 +1,19 @@
-
 "use client";
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { Loader2, AlertCircle, CameraOff, Play, Pause, X, Music, Bot } from "lucide-react";
+import { Loader2, AlertCircle, Play, Pause, X, Music, Bot } from "lucide-react";
 import { useHandTracker } from "@/hooks/use-hand-tracker";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { PUNCH_MAP, TARGET_POSITIONS, TARGET_RADIUS, LOCAL_STORAGE_STATS_KEY } from "@/lib/constants";
+import { PUNCH_MAP, TARGET_POSITIONS, TARGET_RADIUS } from "@/lib/constants";
 import type { Target, SparringStats, Handedness, ChallengeLevel } from "@/lib/types";
-import { useLocalStorage } from "@/hooks/use-local-storage";
+import { useFirestore, useUser, useMemoFirebase } from "@/firebase";
+import { doc, setDoc, serverTimestamp, collection, addDoc, Firestore, writeBatch } from "firebase/firestore";
 import { suggestCombination } from "@/ai/flows/suggest-combination";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { setDocumentNonBlocking } from "@/firebase/non-blocking-updates";
+import { useRouter } from "next/navigation";
 
 type SessionState = "idle" | "starting" | "running" | "paused" | "finished" | "error";
 
@@ -35,11 +37,14 @@ export function SparringSession() {
   const [sessionState, setSessionState] = useState<SessionState>("idle");
   const [targets, setTargets] = useState<Target[]>([]);
   const [combinationHistory, setCombinationHistory] = useState<string[]>([]);
-  const [stats, setStats] = useLocalStorage<SparringStats>(LOCAL_STORAGE_STATS_KEY, initialStats);
   const [sessionStats, setSessionStats] = useState(initialStats);
   const [isFetchingCombo, setIsFetchingCombo] = useState(false);
   const [challengeLevel, setChallengeLevel] = useState<ChallengeLevel>("Medium");
   const [selectedMusic, setSelectedMusic] = useState(MUSIC_TRACKS[0].src);
+
+  const { user, isUserLoading } = useUser();
+  const firestore = useFirestore() as Firestore;
+  const router = useRouter();
 
   const currentTargetIndex = useRef(0);
   const lastHitTimestamp = useRef(0);
@@ -49,12 +54,10 @@ export function SparringSession() {
   const getCombinationDelay = useCallback(() => {
     const musicTrack = MUSIC_TRACKS.find(track => track.src === selectedMusic);
     if (musicTrack && musicTrack.bpm > 0) {
-      // 60,000ms per minute / BPM = ms per beat. Let's do 4 beats.
       return (60000 / musicTrack.bpm) * 4;
     }
     return CHALLENGE_LEVELS[challengeLevel].speed;
   }, [selectedMusic, challengeLevel]);
-
 
   const resetSession = () => {
     setSessionStats(initialStats);
@@ -67,22 +70,51 @@ export function SparringSession() {
   };
 
   const handleStart = async () => {
+    if (!user) {
+      router.push('/login');
+      return;
+    }
     resetSession();
     setSessionState("starting");
     await startTracker();
   };
   
-  const handleStop = () => {
+  const handleStop = async () => {
     stopTracker();
     setSessionState("idle");
-    setStats(prevStats => ({
-      score: prevStats.score + sessionStats.score,
-      punches: prevStats.punches + sessionStats.punches,
-      bestStreak: Math.max(prevStats.bestStreak, sessionStats.bestStreak),
-      accuracy: sessionStats.punches > 0 ? ((prevStats.accuracy * prevStats.punches + sessionStats.accuracy * sessionStats.punches) / (prevStats.punches + sessionStats.punches)) : prevStats.accuracy,
-      avgSpeed: sessionStats.punches > 0 ? ((prevStats.avgSpeed * prevStats.punches + sessionStats.avgSpeed * sessionStats.punches) / (prevStats.punches + sessionStats.punches)) : prevStats.avgSpeed,
-      streak: 0,
-    }));
+
+    if (user && sessionStats.punches > 0) {
+      const batch = writeBatch(firestore);
+      
+      const resultRef = doc(collection(firestore, `users/${user.uid}/results`));
+      batch.set(resultRef, {
+        userId: user.uid,
+        date: serverTimestamp(),
+        ...sessionStats,
+      });
+
+      const metricsRef = doc(firestore, 'metrics', user.uid);
+      // Not using non-blocking here as we are in a batch
+      // This part would ideally be a cloud function for aggregation
+      // For now, we do it client-side
+      const currentMetricsDoc = await (await import('firebase/firestore')).getDoc(metricsRef);
+      const currentMetrics = currentMetricsDoc.data() as SparringStats || initialStats;
+
+      const newTotalPunches = currentMetrics.punches + sessionStats.punches;
+      const newAccuracy = newTotalPunches > 0 ? ((currentMetrics.accuracy * currentMetrics.punches) + (sessionStats.accuracy * sessionStats.punches)) / newTotalPunches : 0;
+      const newAvgSpeed = newTotalPunches > 0 ? ((currentMetrics.avgSpeed * currentMetrics.punches) + (sessionStats.avgSpeed * sessionStats.punches)) / newTotalPunches : 0;
+
+      batch.set(metricsRef, {
+        score: currentMetrics.score + sessionStats.score,
+        punches: newTotalPunches,
+        bestStreak: Math.max(currentMetrics.bestStreak, sessionStats.bestStreak),
+        accuracy: newAccuracy,
+        avgSpeed: newAvgSpeed,
+      }, { merge: true });
+
+      await batch.commit();
+    }
+
     if (audioRef.current) {
         audioRef.current.pause();
         audioRef.current.currentTime = 0;
@@ -181,7 +213,6 @@ export function SparringSession() {
     
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
-    // Draw mirrored video
     ctx.save();
     ctx.translate(canvas.width, 0);
     ctx.scale(-1, 1);
@@ -214,7 +245,7 @@ export function SparringSession() {
       for (let i = 0; i < results.landmarks.length; i++) {
         const landmarks = results.landmarks[i];
         const handedness = results.handedness[i]?.[0]?.categoryName as Handedness;
-        const wrist = landmarks[0]; // Wrist landmark
+        const wrist = landmarks[0];
         
         if (wrist && currentTarget && handedness === currentTarget.hand) {
           const handX = (1 - wrist.x) * canvas.width;
@@ -226,7 +257,7 @@ export function SparringSession() {
 
           if (distance < currentTarget.radius) {
             const hitTime = Date.now();
-            if (hitTime - lastHitTimestamp.current > 500) { // 500ms cooldown
+            if (hitTime - lastHitTimestamp.current > 500) { 
               lastHitTimestamp.current = hitTime;
               
               setSessionStats(prev => {
@@ -245,7 +276,7 @@ export function SparringSession() {
               if (currentTargetIndex.current < targets.length - 1) {
                 currentTargetIndex.current++;
               } else {
-                currentTargetIndex.current++; // Move past the last target
+                currentTargetIndex.current++; 
                 scheduleNextCombination(getCombinationDelay());
               }
             }
@@ -274,6 +305,14 @@ export function SparringSession() {
         audioRef.current.src = selectedMusic !== "none" ? selectedMusic : "";
     }
   }, [selectedMusic]);
+  
+  useEffect(() => {
+    if (!isUserLoading && !user && sessionState !== 'idle') {
+        handleStop();
+        setSessionState('idle');
+    }
+  }, [isUserLoading, user, sessionState]);
+
 
   const renderContent = () => {
     if (sessionState === "error") {
@@ -329,8 +368,8 @@ export function SparringSession() {
               </Card>
             </div>
 
-            <Button size="lg" className="mt-8" onClick={handleStart}>
-                Start Session
+            <Button size="lg" className="mt-8" onClick={handleStart} disabled={isUserLoading}>
+                {isUserLoading ? <Loader2 className="animate-spin" /> : (user ? "Start Session" : "Login to Start")}
             </Button>
             <audio ref={audioRef} loop />
         </div>
@@ -383,5 +422,3 @@ export function SparringSession() {
 
   return renderContent();
 }
-
-    

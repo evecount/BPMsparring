@@ -3,8 +3,9 @@
 import Image from "next/image";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { useLocalStorage } from "@/hooks/use-local-storage";
-import { LOCAL_STORAGE_STATS_KEY } from "@/lib/constants";
+import { useUser, useDoc, useMemoFirebase } from "@/firebase";
+import { doc, Firestore } from "firebase/firestore";
+import { useFirestore } from "@/firebase";
 import { type SparringStats } from "@/lib/types";
 import { PlaceHolderImages } from "@/lib/placeholder-images";
 
@@ -18,8 +19,18 @@ const defaultStats: SparringStats = {
 };
 
 export function LeaderboardTable() {
-  const [stats] = useLocalStorage<SparringStats>(LOCAL_STORAGE_STATS_KEY, defaultStats);
+  const { user } = useUser();
+  const firestore = useFirestore() as Firestore;
+  
+  const userMetricsRef = useMemoFirebase(() => {
+    if (!firestore || !user) return null;
+    return doc(firestore, 'metrics', user.uid);
+  }, [firestore, user]);
+
+  const { data: stats } = useDoc<SparringStats>(userMetricsRef);
   const userAvatar = PlaceHolderImages.find(p => p.id === 'user-avatar');
+
+  const displayStats = stats || defaultStats;
 
   return (
     <Table>
@@ -46,13 +57,13 @@ export function LeaderboardTable() {
                 )}
                 <AvatarFallback>U</AvatarFallback>
               </Avatar>
-              <span className="font-medium">You</span>
+              <span className="font-medium">{user?.displayName || user?.email || 'You'}</span>
             </div>
           </TableCell>
-          <TableCell className="text-right">{stats.score.toLocaleString()}</TableCell>
-          <TableCell className="text-right">{stats.punches.toLocaleString()}</TableCell>
-          <TableCell className="text-right">{stats.bestStreak.toLocaleString()}</TableCell>
-          <TableCell className="text-right">{stats.accuracy.toFixed(1)}%</TableCell>
+          <TableCell className="text-right">{displayStats.score.toLocaleString()}</TableCell>
+          <TableCell className="text-right">{displayStats.punches.toLocaleString()}</TableCell>
+          <TableCell className="text-right">{displayStats.bestStreak.toLocaleString()}</TableCell>
+          <TableCell className="text-right">{displayStats.accuracy.toFixed(1)}%</TableCell>
         </TableRow>
       </TableBody>
     </Table>

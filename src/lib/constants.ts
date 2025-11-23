@@ -22,5 +22,3 @@ export const TARGET_POSITIONS: { [key: string]: { x: number; y: number } } = {
 };
 
 export const HAND_TRACKER_MODEL_PATH = 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task';
-
-export const LOCAL_STORAGE_STATS_KEY = 'digital-spar-stats';

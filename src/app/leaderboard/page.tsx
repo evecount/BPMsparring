@@ -8,7 +8,7 @@ export default function LeaderboardPage() {
         <CardHeader>
           <CardTitle>Leaderboard</CardTitle>
           <CardDescription>
-            Check your personal bests and track your progress. All data is stored locally in your browser.
+            Check your personal bests and track your progress.
           </CardDescription>
         </CardHeader>
         <CardContent>
