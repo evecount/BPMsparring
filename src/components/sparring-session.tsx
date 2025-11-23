@@ -24,7 +24,7 @@ const CHALLENGE_LEVELS: Record<ChallengeLevel, { speed: number; complexity: numb
 };
 
 const MUSIC_TRACKS = [
-    { name: "No Music", src: "" },
+    { name: "No Music", src: "none" },
     { name: "Mission Ready", src: "https://files.freemusicarchive.org/storage-freemusicarchive-org/music/cc_by/Ketsa/Raising_Frequecies/Ketsa_-_03_-_Mission_Ready.mp3" },
     { name: "The 90s", src: "https://files.freemusicarchive.org/storage-freemusicarchive-org/music/no_curator/Monk/The_Sagat/Monk_-_09_-_The_90s.mp3" },
     { name: "Enthusiast", src: "https://files.freemusicarchive.org/storage-freemusicarchive-org/music/cc_by/Tours/Enthusiast/Tours_-_01_-_Enthusiast.mp3" },
@@ -83,12 +83,12 @@ export function SparringSession() {
   const handlePause = () => {
     setSessionState(ss => {
         if (ss === "running") {
-            if (audioRef.current?.src) audioRef.current.pause();
+            if (audioRef.current?.src && selectedMusic !== "none") audioRef.current.pause();
             if(nextComboTimeout.current) clearTimeout(nextComboTimeout.current);
             return "paused";
         }
         if (ss === "paused") {
-            if (audioRef.current?.src) audioRef.current.play();
+            if (audioRef.current?.src && selectedMusic !== "none") audioRef.current.play();
             scheduleNextCombination(0);
             return "running";
         }
@@ -149,11 +149,11 @@ export function SparringSession() {
   useEffect(() => {
     if(!loading && sessionState === 'starting') {
         setSessionState('running');
-        if (audioRef.current?.src) {
+        if (audioRef.current?.src && selectedMusic !== "none") {
             audioRef.current.play();
         }
     }
-  }, [loading, sessionState]);
+  }, [loading, sessionState, selectedMusic]);
 
   useEffect(() => {
     if (error) setSessionState("error");
@@ -262,7 +262,7 @@ export function SparringSession() {
 
   useEffect(() => {
     if (audioRef.current) {
-        audioRef.current.src = selectedMusic;
+        audioRef.current.src = selectedMusic !== "none" ? selectedMusic : "";
     }
   }, [selectedMusic]);
 
