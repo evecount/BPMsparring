@@ -419,7 +419,7 @@ export function SparringSession() {
                 <Select onValueChange={handleMusicChange} defaultValue={selectedMusic.src}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select music" />
-                  </SelectTrigger>
+                  </Trigger>
                   <SelectContent>
                     {MUSIC_TRACKS.map(track => (
                       <SelectItem key={track.src} value={track.src}>
@@ -448,7 +448,7 @@ export function SparringSession() {
                 <Loader2 className="w-16 h-16 animate-spin text-primary" />
                 <p className="text-primary-foreground mt-4 text-lg">Starting camera & loading AI model...</p>
               </div>)}
-          <video ref={videoRef} className="absolute inset-0 w-full h-full object-cover" style={{ display: 'none' }} playsInline />
+          <video ref={videoRef} className="absolute inset-0 w-full h-full object-cover" style={{ transform: 'scaleX(-1)' }} playsInline />
           <canvas ref={canvasRef} className="absolute inset-0 w-full h-full object-cover" />
           <div className="absolute top-4 left-4 z-10 flex gap-2">
             <Button size="icon" onClick={handleStop} variant="destructive">
