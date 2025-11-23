@@ -84,48 +84,50 @@ export default function LoginPage() {
 
   return (
     <div className="flex-1 flex items-center justify-center p-4">
-      <form onSubmit={form.handleSubmit(onSubmit)}>
-        <Card className="w-full max-w-sm glass-panel">
-          <CardHeader>
-            <CardTitle>Login or Sign Up</CardTitle>
-            <CardDescription>Enter your details below or sign in anonymously.</CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-4">
-            <FormField
-              control={form.control}
-              name="email"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Email</FormLabel>
-                  <FormControl>
-                    <Input placeholder="name@example.com" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="password"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Password</FormLabel>
-                  <FormControl>
-                    <Input type="password" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </CardContent>
-          <CardFooter className="flex flex-col gap-4">
-            <Button type="submit" className="w-full" variant="destructive">Sign In / Sign Up</Button>
-            <Button type="button" variant="secondary" className="w-full" onClick={handleAnonymousSignIn}>
-              Continue Anonymously
-            </Button>
-          </CardFooter>
-        </Card>
-      </form>
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)}>
+          <Card className="w-full max-w-sm glass-panel">
+            <CardHeader>
+              <CardTitle>Login or Sign Up</CardTitle>
+              <CardDescription>Enter your details below or sign in anonymously.</CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-4">
+              <FormField
+                control={form.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Email</FormLabel>
+                    <FormControl>
+                      <Input placeholder="name@example.com" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="password"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Password</FormLabel>
+                    <FormControl>
+                      <Input type="password" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </CardContent>
+            <CardFooter className="flex flex-col gap-4">
+              <Button type="submit" className="w-full" variant="destructive">Sign In / Sign Up</Button>
+              <Button type="button" variant="secondary" className="w-full" onClick={handleAnonymousSignIn}>
+                Continue Anonymously
+              </Button>
+            </CardFooter>
+          </Card>
+        </form>
+      </Form>
     </div>
   );
 }
