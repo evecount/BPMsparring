@@ -45,7 +45,7 @@ const missionReadyPunches: BeatMap['punches'] = [
 
 export const MUSIC_TRACKS: BeatMap[] = [
   { 
-    name: 'No Music', 
+    name: 'No Music (AI Mode)', 
     src: 'none', 
     bpm: 120, // Default BPM for AI mode without music
     offset: 0,

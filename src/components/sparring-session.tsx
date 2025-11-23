@@ -20,6 +20,13 @@ type SessionState = 'idle' | 'starting' | 'running' | 'paused' | 'finished' | 'e
 
 const initialStats: SparringStats = { score: 0, punches: 0, accuracy: 0, streak: 0, bestStreak: 0, avgSpeed: 0 };
 
+// Define challenge levels with specific properties for AI mode
+const CHALLENGE_LEVELS = {
+  Easy: { complexity: 2, speed: 2000 },
+  Medium: { complexity: 4, speed: 1500 },
+  Hard: { complexity: 6, speed: 1000 },
+};
+
 export function SparringSession() {
   const { videoRef, canvasRef, results, loading, error, startTracker, stopTracker } = useHandTracker();
   const [sessionState, setSessionState] = useState<SessionState>('idle');
@@ -37,8 +44,10 @@ export function SparringSession() {
   const lastHitTimestamp = useRef(0);
   const audioRef = useRef<HTMLAudioElement>(null);
   const gameLoopRef = useRef<number>();
-  const nextPunchIndexRef = useRef(0);
   
+  // Beatmap / Choreography specific refs
+  const nextPunchIndexRef = useRef(0);
+
   // AI-mode specific refs
   const nextComboTimeout = useRef<NodeJS.Timeout | null>(null);
   const currentTargetIndex = useRef(0);
@@ -384,7 +393,7 @@ export function SparringSession() {
             <Card className="glass-panel">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-lg">
-                  <Bot className="w-5 h-5" /> Challenge Level
+                  <Bot className="w-5 h-5" /> Challenge Level (AI Mode)
                 </CardTitle>
               </CardHeader>
               <CardContent>
