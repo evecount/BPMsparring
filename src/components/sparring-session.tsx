@@ -17,6 +17,7 @@ import { MUSIC_TRACKS } from '@/lib/beat-maps';
 import { Textarea } from '@/components/ui/textarea';
 import { SparringContext } from '@/context/SparringContext';
 import { cn } from '@/lib/utils';
+import { useToast } from '@/hooks/use-toast';
 
 const initialStats: SparringStats = { score: 0, punches: 0, accuracy: 0, streak: 0, bestStreak: 0, avgSpeed: 0 };
 
@@ -36,6 +37,9 @@ export function SparringSession() {
   const [challengeLevel, setChallengeLevel] = useState<ChallengeLevel>('Medium');
   const [selectedMusic, setSelectedMusic] = useState(MUSIC_TRACKS[0]);
   const [customPrompt, setCustomPrompt] = useState('');
+  const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
+  const { toast } = useToast();
+
 
   const { user } = useUser();
   const firestore = useFirestore();
@@ -48,6 +52,29 @@ export function SparringSession() {
 
   const nextComboTimeout = useRef<NodeJS.Timeout | null>(null);
   const currentTargetIndex = useRef(0);
+
+  const getCameraPermission = async () => {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setError("Camera access is not supported by your browser.");
+      setHasCameraPermission(false);
+      return false;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      stream.getTracks().forEach(track => track.stop()); // Stop the stream immediately, we just wanted permission
+      setHasCameraPermission(true);
+      return true;
+    } catch (error) {
+      console.error('Error accessing camera:', error);
+      setHasCameraPermission(false);
+      toast({
+        variant: 'destructive',
+        title: 'Camera Access Denied',
+        description: 'Please enable camera permissions in your browser settings to use this feature.',
+      });
+      return false;
+    }
+  };
 
   const resetSession = () => {
     if (setSessionStats) setSessionStats(initialStats);
@@ -62,6 +89,12 @@ export function SparringSession() {
 
   const handleStart = async () => {
     if (!setSessionState) return;
+
+    const permissionGranted = await getCameraPermission();
+    if (!permissionGranted) {
+      return;
+    }
+    
     resetSession();
     setSessionState('starting');
     await startTracker();
@@ -378,7 +411,7 @@ export function SparringSession() {
               <p className="text-primary-foreground mt-4 text-lg">Starting camera & loading AI model...</p>
             </div>
           )}
-          <video ref={videoRef} className="absolute inset-0 w-full h-full object-cover z-10" style={{ transform: 'scaleX(-1)' }} playsInline />
+          <video ref={videoRef} className="absolute inset-0 w-full h-full object-cover z-10" style={{ transform: 'scaleX(-1)' }} playsInline autoPlay muted/>
           <canvas ref={canvasRef} className="absolute inset-0 w-full h-full object-cover z-20" />
           {isSessionActive && (
              <div className="absolute top-4 left-4 z-30 flex gap-2">
@@ -389,6 +422,17 @@ export function SparringSession() {
                   {sessionState === 'paused' ? <Play /> : <Pause />}
                 </Button>
               </div>
+          )}
+           {hasCameraPermission === false && (
+            <div className="absolute inset-0 bg-black/80 flex items-center justify-center z-40">
+              <Alert variant="destructive" className="max-w-md">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Camera Access Required</AlertTitle>
+                <AlertDescription>
+                  Please allow camera access in your browser settings to start the session. You may need to refresh the page after granting permission.
+                </AlertDescription>
+              </Alert>
+            </div>
           )}
         </div>
       </div>
@@ -476,3 +520,5 @@ export function SparringSession() {
     </>
   );
 }
+
+    
