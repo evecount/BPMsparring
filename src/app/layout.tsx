@@ -39,7 +39,8 @@ function AppBody({ children }: { children: React.ReactNode }) {
       "font-body antialiased",
       isSparringActive && "sparring-active"
     )}>
-      {children}
+      <AppShell>{children}</AppShell>
+      <Toaster />
     </body>
   )
 }
@@ -59,9 +60,8 @@ export default function RootLayout({
       <FirebaseClientProvider>
         <SparringProvider>
           <AppBody>
-            <AppShell>{children}</AppShell>
+            {children}
           </AppBody>
-          <Toaster />
         </SparringProvider>
       </FirebaseClientProvider>
     </html>
