@@ -39,25 +39,7 @@ export function RpsSession() {
   const timeoutRef = useRef<NodeJS.Timeout>();
 
   useEffect(() => {
-    const init = async () => {
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        setGameState('error');
-        toast({
-          variant: 'destructive',
-          title: 'Unsupported Browser',
-          description: 'Camera access is not supported by your browser.',
-        });
-        return;
-      }
-      try {
-        await navigator.mediaDevices.getUserMedia({ video: true });
-        startTracker();
-      } catch (err) {
-        console.error("Camera permission denied on init:", err);
-        setGameState('permission_denied');
-      }
-    };
-    init();
+    startTracker();
 
     return () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
@@ -69,6 +51,16 @@ export function RpsSession() {
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (error) {
+      if(error.includes("denied")) {
+        setGameState('permission_denied');
+      } else {
+        setGameState('error');
+      }
+    }
+  }, [error]);
 
   const chooseNextPunch = useCallback(() => {
     // Simple logic: pick a random punch. Antigravity will make this smart.
@@ -92,9 +84,9 @@ export function RpsSession() {
       audioRef.current.pause();
       if (selectedTrack.src !== 'none') {
         audioRef.current.src = selectedTrack.src;
-        audioRef.current.load(); // This can trigger the error if src is invalid
+        audioRef.current.load();
       } else {
-        audioRef.current.removeAttribute('src'); // Clear src for no music mode
+        audioRef.current.removeAttribute('src');
       }
     }
   
@@ -247,10 +239,6 @@ export function RpsSession() {
   }, [loading, error, gameState, gameLoop]);
 
 
-  useEffect(() => {
-    if (error) setGameState('error');
-  }, [error]);
-
   const handleStop = () => {
     window.location.reload(); 
   };
@@ -260,7 +248,7 @@ export function RpsSession() {
 
   return (
     <>
-      <audio ref={audioRef} />
+      <audio ref={audioRef} onError={(e) => console.error('Audio Error:', e.currentTarget.error)} />
       <div className={cn("w-full h-full flex flex-col items-center justify-center absolute inset-0 z-0 bg-black")}>
         <div className={cn("relative w-full h-full")}>
           <video ref={videoRef} className="absolute inset-0 w-full h-full object-cover z-10" style={{ transform: 'scaleX(-1)' }} playsInline autoPlay muted/>
@@ -362,4 +350,5 @@ export function RpsSession() {
       </div>
     </>
   );
-}
+
+    
