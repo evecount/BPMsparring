@@ -6,39 +6,31 @@ import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
 import { AppShell } from '@/components/app-shell';
 import { FirebaseClientProvider } from '@/firebase/client-provider';
-import { SparringContext, SparringProvider } from '@/context/SparringContext';
-import { useContext, useEffect } from 'react';
-import { cn } from '@/lib/utils';
+import { useEffect } from 'react';
 
 
 // This can't be a server component because of the context usage
 // export const metadata: Metadata = {
-//   title: 'BPMsparring',
-//   description: 'An AI-powered boxing coach to improve your skills.',
+//   title: 'ANTIGRAVITY-ZERO',
+//   description: 'Reactive AI feedback loop demo.',
 // };
 
 function AppBody({ children }: { children: React.ReactNode }) {
-  const { sessionState } = useContext(SparringContext);
-  const isSparringActive = sessionState === 'running' || sessionState === 'paused' || sessionState === 'starting';
-
   useEffect(() => {
-    document.title = 'BPMsparring';
+    document.title = 'ANTIGRAVITY-ZERO';
     const metaDescription = document.querySelector('meta[name="description"]');
     if (metaDescription) {
-      metaDescription.setAttribute('content', 'An AI-powered boxing coach to improve your skills.');
+      metaDescription.setAttribute('content', 'Reactive AI feedback loop demo.');
     } else {
       const meta = document.createElement('meta');
       meta.name = 'description';
-      meta.content = 'An AI-powered boxing coach to improve your skills.';
+      meta.content = 'Reactive AI feedback loop demo.';
       document.head.appendChild(meta);
     }
   }, []);
 
   return (
-    <body className={cn(
-      "font-body antialiased",
-      isSparringActive && "sparring-active"
-    )}>
+    <body>
       <AppShell>{children}</AppShell>
       <Toaster />
     </body>
@@ -58,11 +50,9 @@ export default function RootLayout({
         <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet" />
       </head>
       <FirebaseClientProvider>
-        <SparringProvider>
-          <AppBody>
-            {children}
-          </AppBody>
-        </SparringProvider>
+        <AppBody>
+          {children}
+        </AppBody>
       </FirebaseClientProvider>
     </html>
   );

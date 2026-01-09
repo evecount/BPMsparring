@@ -1,4 +1,4 @@
 import { config } from 'dotenv';
 config();
 
-import '@/ai/flows/suggest-combination.ts';
+import '@/ai/flows/get-ai-move.ts';
