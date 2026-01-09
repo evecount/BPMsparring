@@ -17,8 +17,6 @@ import { MUSIC_TRACKS } from '@/lib/beat-maps';
 import { Textarea } from '@/components/ui/textarea';
 import { SparringContext } from '@/context/SparringContext';
 
-type SessionState = 'idle' | 'starting' | 'running' | 'paused' | 'error';
-
 const initialStats: SparringStats = { score: 0, punches: 0, accuracy: 0, streak: 0, bestStreak: 0, avgSpeed: 0 };
 
 const CHALLENGE_LEVELS = {
@@ -51,7 +49,7 @@ export function SparringSession() {
   const currentTargetIndex = useRef(0);
 
   const resetSession = () => {
-    setSessionStats(initialStats);
+    if (setSessionStats) setSessionStats(initialStats);
     setTargets([]);
     setCombinationHistory([]);
     currentTargetIndex.current = 0;
@@ -154,7 +152,11 @@ export function SparringSession() {
     if (isFetchingCombo || selectedMusic.punches.length > 0) return;
     setIsFetchingCombo(true);
     try {
-      const { suggestedCombination } = await suggestCombination({ recentCombinations: combinationHistory.slice(-5), customPrompt: customPrompt });
+      const { suggestedCombination } = await suggestCombination({ 
+        recentCombinations: combinationHistory.slice(-5), 
+        customPrompt: customPrompt,
+        playerAccuracy: sessionStats.accuracy,
+      });
       const punchKeys = suggestedCombination
         .split(/[-,\s]/)
         .filter(p => PUNCH_MAP[p])
@@ -182,7 +184,7 @@ export function SparringSession() {
     } finally {
       setIsFetchingCombo(false);
     }
-  }, [combinationHistory, challengeLevel, isFetchingCombo, selectedMusic, customPrompt, setSessionState]);
+  }, [combinationHistory, challengeLevel, isFetchingCombo, selectedMusic, customPrompt, setSessionState, sessionStats.accuracy]);
 
   const gameLoop = useCallback(() => {
     const isChoreographed = selectedMusic.punches.length > 0;
@@ -293,14 +295,16 @@ export function SparringSession() {
                 if (hitTime - lastHitTimestamp.current > 300) { 
                   lastHitTimestamp.current = hitTime;
 
-                  setSessionStats(prev => {
-                    const newPunches = prev.punches + 1;
-                    const newStreak = prev.streak + 1;
-                    const totalPunchesForAcc = prev.punches;
-                    const newAccuracy = totalPunchesForAcc > 0 ? (prev.accuracy * totalPunchesForAcc + 100) / (totalPunchesForAcc + 1) : 100;
+                  if(setSessionStats) {
+                    setSessionStats(prev => {
+                      const newPunches = prev.punches + 1;
+                      const newStreak = prev.streak + 1;
+                      const totalPunchesForAcc = prev.punches;
+                      const newAccuracy = totalPunchesForAcc > 0 ? (prev.accuracy * totalPunchesForAcc + 100) / (totalPunchesForAcc + 1) : 100;
 
-                    return { ...prev, score: prev.score + 10, punches: newPunches, accuracy: newAccuracy, streak: newStreak, bestStreak: Math.max(prev.bestStreak, newStreak) };
-                  });
+                      return { ...prev, score: prev.score + 10, punches: newPunches, accuracy: newAccuracy, streak: newStreak, bestStreak: Math.max(prev.bestStreak, newStreak) };
+                    });
+                  }
 
                   if (selectedMusic.punches.length > 0) {
                     setTargets(prev => prev.map(t => t.id === target.id ? { ...t, hit: true } : t));
@@ -333,14 +337,17 @@ export function SparringSession() {
 
 
   useEffect(() => {
-    if (!loading && sessionState === 'starting') {
-      if (setSessionState) setSessionState('running');
-      if (audioRef.current?.src && selectedMusic.src !== 'none') {
-        audioRef.current.play().catch(e => console.error('Audio play failed:', e));
-      }
-      gameLoop();
+    if (!loading && sessionState === 'starting' && setSessionState) {
+      setSessionState('running');
     }
-  }, [loading, sessionState, selectedMusic, gameLoop, setSessionState]);
+  }, [loading, sessionState, setSessionState]);
+
+  useEffect(() => {
+    if(sessionState === 'running' && audioRef.current?.src && selectedMusic.src !== 'none') {
+        audioRef.current.play().catch(e => console.error('Audio play failed:', e));
+    }
+  }, [sessionState, selectedMusic.src]);
+
 
   useEffect(() => {
     if (error && setSessionState) setSessionState('error');
