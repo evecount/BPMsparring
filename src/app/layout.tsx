@@ -11,13 +11,13 @@ import { useEffect } from 'react';
 
 // This can't be a server component because of the context usage
 // export const metadata: Metadata = {
-//   title: 'ANTIGRAVITY-ZERO',
+//   title: 'BPMSPARRING',
 //   description: 'Reactive AI feedback loop demo.',
 // };
 
 function AppBody({ children }: { children: React.ReactNode }) {
   useEffect(() => {
-    document.title = 'ANTIGRAVITY-ZERO';
+    document.title = 'BPMSPARRING';
     const metaDescription = document.querySelector('meta[name="description"]');
     if (metaDescription) {
       metaDescription.setAttribute('content', 'Reactive AI feedback loop demo.');
