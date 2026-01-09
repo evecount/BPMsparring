@@ -11,6 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent } from './ui/card';
 import { PUNCH_MAP, TARGET_POSITIONS, TARGET_RADIUS } from '@/lib/constants';
 import type { Handedness } from '@/lib/types';
+import { HandLandmarker } from '@mediapipe/tasks-vision';
 
 type GameState = 'initializing' | 'permission_denied' | 'ready' | 'countdown' | 'playing' | 'error';
 type Winner = 'user' | 'ai' | 'tie' | null;
@@ -224,20 +225,20 @@ export function RpsSession() {
           <div className="flex flex-col items-center justify-center text-center">
             <Loader2 className="w-16 h-16 animate-spin text-primary" />
             <p className="text-foreground mt-4 text-lg">
-              Loading Reactive AI...
+              Initializing Bio-Temporal Link...
             </p>
           </div>
         )}
 
         {gameState === 'ready' && (
-          <div className="text-center p-4 max-w-2xl mx-auto glass-panel rounded-lg">
-            <h1 className="text-4xl font-bold tracking-tight">ANTIGRAVITY-ZERO</h1>
-            <p className="mt-2 text-lg text-foreground/80">
-              A reactive sparring partner that pushes your speed and precision.
+           <div className="text-center p-4 max-w-2xl mx-auto glass-panel rounded-lg">
+            <h1 className="text-4xl sm:text-5xl font-bold tracking-tight text-primary">Engage the Edge of Now</h1>
+            <p className="mt-4 text-lg sm:text-xl text-foreground/80">
+              You are entering a reactive feedback loop. The system syncs with your physical state, not a button click. This is a test of a new AI paradigm.
             </p>
             <Button size="lg" className="mt-8" onClick={startGameRound} variant="destructive">
               <Play className="mr-2 h-4 w-4" />
-              Start Session
+              Begin Synchronization
             </Button>
           </div>
         )}
@@ -298,5 +299,3 @@ export function RpsSession() {
     </>
   );
 }
-
-    

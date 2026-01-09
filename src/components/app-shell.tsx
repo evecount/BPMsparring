@@ -63,6 +63,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </header>
       <main className="flex-1 flex flex-col">{children}</main>
+      <footer className="p-4 text-center text-xs text-muted-foreground">
+        © 2026 BPMsparring is a property of Eve Count Pte Ltd
+      </footer>
     </div>
   );
 }
