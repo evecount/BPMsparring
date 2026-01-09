@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Loader2, AlertCircle, Play, X } from 'lucide-react';
+import { Loader2, AlertCircle, Play, X, CameraOff } from 'lucide-react';
 import { useHandTracker } from '@/hooks/use-hand-tracker';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -10,14 +10,13 @@ import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent } from './ui/card';
 
-type GameState = 'idle' | 'requesting_permission' | 'starting' | 'countdown' | 'playing' | 'error';
+type GameState = 'initializing' | 'permission_denied' | 'ready' | 'countdown' | 'playing' | 'error';
 type Winner = 'user' | 'ai' | 'tie' | null;
 
 
 export function RpsSession() {
   const { videoRef, canvasRef, results, loading, error, startTracker, stopTracker } = useHandTracker();
-  const [gameState, setGameState] = useState<GameState>('idle');
-  const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
+  const [gameState, setGameState] = useState<GameState>('initializing');
   const { toast } = useToast();
   
   const [userScore, setUserScore] = useState(0);
@@ -27,49 +26,43 @@ export function RpsSession() {
   const gameLoopRef = useRef<number>();
   const timeoutRef = useRef<NodeJS.Timeout>();
 
+  // Immediately request camera and start tracker on component mount
   useEffect(() => {
+    const init = async () => {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        setGameState('error');
+        toast({
+          variant: 'destructive',
+          title: 'Unsupported Browser',
+          description: 'Camera access is not supported by your browser.',
+        });
+        return;
+      }
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        stream.getTracks().forEach(track => track.stop()); // Stop this initial stream, hook will start its own
+        startTracker(); // This will handle the stream and landmarker loading
+      } catch (err) {
+        console.error("Camera permission denied on init:", err);
+        setGameState('permission_denied');
+        toast({
+          variant: 'destructive',
+          title: 'Camera Access Denied',
+          description: 'Please enable camera permissions to start the session.',
+        });
+      }
+    };
+    init();
+
     return () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
       if (gameLoopRef.current) cancelAnimationFrame(gameLoopRef.current);
       stopTracker();
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stopTracker]);
-  
-  const handleStart = async () => {
-    setGameState('requesting_permission');
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      setError("Camera access is not supported by your browser.");
-      setGameState('error');
-      setHasCameraPermission(false);
-      return;
-    }
-
-    try {
-      // Just request permission, don't use the stream yet. The hook will handle it.
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-      stream.getTracks().forEach(track => track.stop()); // Immediately stop the tracks
-      setHasCameraPermission(true);
-      setGameState('starting');
-    } catch (err) {
-      console.error("Camera permission denied:", err);
-      setHasCameraPermission(false);
-      setGameState('idle');
-       toast({
-        variant: 'destructive',
-        title: 'Camera Access Denied',
-        description: 'Please enable camera permissions to start the session.',
-      });
-    }
-  };
 
 
-  const handleStop = () => {
-    stopTracker();
-    setGameState('idle');
-    if (gameLoopRef.current) cancelAnimationFrame(gameLoopRef.current);
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-  };
-  
   const startGameRound = useCallback(() => {
     setCountdown(3);
     setGameState('countdown');
@@ -117,33 +110,31 @@ export function RpsSession() {
   }, [draw]);
 
   useEffect(() => {
-    if (gameState === 'starting' && hasCameraPermission) {
-      startTracker(); // The hook will set loading state
-    }
-  }, [gameState, hasCameraPermission, startTracker]);
-
-
-  // Effect to transition from tracker loading to starting the game
-  useEffect(() => {
-    // When the tracker is done loading (loading is false) and we are in the 'starting' state
-    if (!loading && gameState === 'starting' && hasCameraPermission && !error) {
-      startGameRound();
+    // When tracker is no longer loading and not in an error state, it's ready.
+    if (!loading && !error && gameState === 'initializing') {
+      setGameState('ready');
       gameLoop();
     }
-  }, [loading, gameState, hasCameraPermission, gameLoop, startGameRound, error]);
+  }, [loading, error, gameState, gameLoop]);
 
 
   useEffect(() => {
     if (error) setGameState('error');
   }, [error]);
 
-  const isSessionActive = ['starting', 'countdown', 'playing'].includes(gameState);
+  const handleStop = () => {
+    // This function might need to reset the app state more gracefully
+    window.location.reload(); 
+  };
+
+
+  const isSessionActive = ['countdown', 'playing'].includes(gameState);
 
   return (
     <>
-      <div className={cn("w-full h-full flex flex-col items-center justify-center absolute inset-0 z-0")}>
-         {/* Video and Canvas are always in the DOM but hidden/shown via parent */}
-        <div className={cn("relative w-full h-full", isSessionActive ? "block" : "hidden")}>
+      <div className={cn("w-full h-full flex flex-col items-center justify-center absolute inset-0 z-0 bg-black")}>
+         {/* Video and Canvas are always in the DOM */}
+        <div className={cn("relative w-full h-full")}>
           <video ref={videoRef} className="absolute inset-0 w-full h-full object-cover z-10" style={{ transform: 'scaleX(-1)' }} playsInline autoPlay muted/>
           <canvas ref={canvasRef} className="absolute inset-0 w-full h-full object-cover z-20" />
         </div>
@@ -151,37 +142,39 @@ export function RpsSession() {
       
       {/* UI Overlay */}
       <div className="absolute inset-0 z-30 flex flex-col items-center justify-center p-4">
-        {gameState === 'idle' && (
-          <div className="text-center p-4 max-w-2xl mx-auto glass-panel rounded-lg">
-            <h1 className="text-4xl font-bold tracking-tight">BPM Sparring</h1>
-            <p className="mt-2 text-lg text-foreground/80">
-              A reactive sparring partner that pushes your speed and precision.
+        
+        {gameState === 'initializing' && (
+          <div className="flex flex-col items-center justify-center text-center">
+            <Loader2 className="w-16 h-16 animate-spin text-primary" />
+            <p className="text-foreground mt-4 text-lg">
+              Loading Reactive AI...
             </p>
-
-            <Button size="lg" className="mt-8" onClick={handleStart} variant="destructive">
-              <Play className="mr-2 h-4 w-4" />
-              Start Session
-            </Button>
-            {hasCameraPermission === false && (
-                <Alert variant="destructive" className="mt-4 text-left">
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertTitle>Camera Access Required</AlertTitle>
-                  <AlertDescription>
-                    You must enable camera permissions in your browser to start sparring. Please grant access and try again.
-                  </AlertDescription>
-                </Alert>
-            )}
           </div>
         )}
 
-        {(gameState === 'requesting_permission' || (gameState === 'starting' && loading)) && (
-            <div className="flex flex-col items-center justify-center text-center">
-              <Loader2 className="w-16 h-16 animate-spin text-primary" />
-              <p className="text-primary-foreground mt-4 text-lg">
-                {gameState === 'requesting_permission' ? 'Requesting Camera Access...' : 'Loading Reactive AI...'}
+        {gameState === 'ready' && (
+          <div className="text-center p-4 max-w-2xl mx-auto glass-panel rounded-lg">
+            <h1 className="text-4xl font-bold tracking-tight">ANTIGRAVITY-ZERO</h1>
+            <p className="mt-2 text-lg text-foreground/80">
+              A reactive sparring partner that pushes your speed and precision.
+            </p>
+            <Button size="lg" className="mt-8" onClick={startGameRound} variant="destructive">
+              <Play className="mr-2 h-4 w-4" />
+              Start Session
+            </Button>
+          </div>
+        )}
+
+        {gameState === 'permission_denied' && (
+           <div className="text-center p-4 max-w-2xl mx-auto glass-panel rounded-lg">
+              <CameraOff className="mx-auto h-16 w-16 text-destructive" />
+              <h1 className="text-3xl font-bold tracking-tight mt-4">Camera Access Denied</h1>
+              <p className="mt-2 text-lg text-foreground/80">
+                This experience requires camera access. Please enable camera permissions in your browser settings and refresh the page.
               </p>
-            </div>
-          )}
+           </div>
+        )}
+
 
         {isSessionActive && (
           <>
@@ -224,7 +217,7 @@ export function RpsSession() {
             <AlertCircle className="h-4 w-4" />
             <AlertTitle>An Error Occurred</AlertTitle>
             <AlertDescription>{error || 'Something went wrong. Please refresh and try again.'}</AlertDescription>
-            <Button onClick={() => setGameState('idle')} className="mt-4">Back to Start</Button>
+            <Button onClick={() => window.location.reload()} className="mt-4">Refresh Page</Button>
           </Alert>
         )}
       </div>

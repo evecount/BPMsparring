@@ -10,7 +10,7 @@ let animationFrameId: number;
 
 export function useHandTracker() {
   const [results, setResults] = useState<HandLandmarkerResult | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true); // Start loading initially
   const [error, setError] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -18,7 +18,7 @@ export function useHandTracker() {
 
   const createHandLandmarker = useCallback(async () => {
     // Prevent re-running if an instance is already being created or exists
-    if (handLandmarker || loading) return;
+    if (handLandmarker) return;
 
     setLoading(true);
     setError(null);
@@ -34,13 +34,13 @@ export function useHandTracker() {
         runningMode: "VIDEO",
         numHands: 2,
       });
+      setLoading(false);
     } catch (e: any) {
       console.error("Error creating HandLandmarker:", e);
       setError("Failed to load AI model. Your browser might not be supported, or there could be a network issue.");
-    } finally {
       setLoading(false);
     }
-  }, [loading]);
+  }, []);
 
   // Initialize on mount
   useEffect(() => {
@@ -88,12 +88,12 @@ export function useHandTracker() {
   const startTracker = useCallback(async () => {
     if (isRunning.current) return;
     
-    // Create the landmarker if it doesn't exist.
-    if (!handLandmarker) {
-      await createHandLandmarker();
+    if (loading) {
+      // If landmarker is still loading, wait a bit and retry
+      setTimeout(startTracker, 100);
+      return;
     }
     
-    // Now check again after attempting to create it.
     if (!handLandmarker) {
         setError("Hand tracking model could not be initialized. Please refresh the page.");
         return;
@@ -105,7 +105,6 @@ export function useHandTracker() {
     }
     
     setError(null);
-    setLoading(true);
 
     try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 } });
@@ -113,16 +112,14 @@ export function useHandTracker() {
             videoRef.current.srcObject = stream;
             videoRef.current.addEventListener("loadeddata", () => {
                 isRunning.current = true;
-                setLoading(false); // Stop loading ONLY when data is loaded
                 predictWebcam();
             });
         }
     } catch (err: any) {
         console.error("Error accessing webcam:", err);
         setError("Camera access was denied. Please enable camera permissions in your browser settings.");
-        setLoading(false);
     }
-  }, [predictWebcam, createHandLandmarker]);
+  }, [predictWebcam, loading]);
 
   const stopTracker = useCallback(() => {
     isRunning.current = false;

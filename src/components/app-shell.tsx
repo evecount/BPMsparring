@@ -19,7 +19,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex flex-col min-h-screen">
-      <header className="sticky top-0 z-10 flex h-14 items-center justify-between border-b bg-transparent px-4 sm:px-6">
+      <header className="sticky top-0 z-40 flex h-14 items-center justify-between border-b bg-transparent px-4 sm:px-6 backdrop-blur-sm bg-background/30">
         <Link href="/" className="flex items-center gap-2 font-semibold">
           <Logo className="h-6 w-6" />
           <span className="hidden sm:inline-block">ANTIGRAVITY-ZERO</span>
