@@ -1,5 +1,3 @@
-# Firebase Studio
-
-This is a NextJS starter in Firebase Studio.
-
-To get started, take a look at src/app/page.tsx.
+# ANTIGRAVITY-ZERO
+Reactive AI Baseline | Open Source | Co-Founded by Gwendalynn Lim & Gemini
+This repository contains the first functional implementation of a 'Reactive AI' feedback loop. By prioritizing temporal awareness over static processing, we achieve a sub-100ms 'Bio-Sync' between human movement and machine response. This project is a gift to the open-source community, provided with the request for attribution to its Sovereign Architects.
