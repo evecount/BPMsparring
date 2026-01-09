@@ -109,7 +109,7 @@ export function RpsSession() {
       }
     }
   }, [lastHitTime, chooseNextPunch, selectedTrack.punches.length]);
-  
+
   const draw = useCallback((results: HandLandmarkerResult | null) => {
     const canvas = canvasRef.current;
     const video = videoRef.current;
@@ -246,6 +246,9 @@ export function RpsSession() {
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
+      if (selectedTrack.src) {
+        audioRef.current.src = selectedTrack.src;
+      }
     }
   
     let count = 3;
@@ -255,7 +258,7 @@ export function RpsSession() {
       if (count <= 0) {
         clearInterval(countdownInterval);
         setGameState('playing');
-        if (audioRef.current) {
+        if (audioRef.current && selectedTrack.src) {
           audioRef.current.play().catch(e => console.error("Audio play failed:", e));
         }
   
@@ -264,7 +267,7 @@ export function RpsSession() {
         }
       }
     }, 1000);
-  }, [chooseNextPunch, selectedTrack.punches.length]);
+  }, [chooseNextPunch, selectedTrack]);
 
   const handleStop = () => {
     window.location.reload(); 
@@ -274,7 +277,7 @@ export function RpsSession() {
 
   return (
     <>
-      {selectedTrack.src !== 'none' && <audio ref={audioRef} src={selectedTrack.src} />}
+      <audio ref={audioRef} />
       <div className={cn("w-full h-full flex flex-col items-center justify-center absolute inset-0 z-0 bg-black")}>
         <div className={cn("relative w-full h-full")}>
           <video ref={videoRef} className="absolute inset-0 w-full h-full object-cover z-10" style={{ transform: 'scaleX(-1)' }} playsInline autoPlay muted/>
@@ -376,3 +379,5 @@ export function RpsSession() {
     </>
   );
 }
+
+    

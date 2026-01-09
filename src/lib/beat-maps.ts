@@ -45,13 +45,6 @@ const missionReadyPunches: BeatMap['punches'] = [
 
 export const MUSIC_TRACKS: BeatMap[] = [
   { 
-    name: 'No Music (AI Mode)', 
-    src: 'none', 
-    bpm: 120, // Default BPM for AI mode without music
-    offset: 0,
-    punches: [], // Empty array signifies AI-driven mode
-  },
-  { 
     name: 'Mission Ready (Choreographed)', 
     src: 'https://files.freemusicarchive.org/storage-freemusicarchive-org/music/cc_by/Ketsa/Raising_Frequecies/Ketsa_-_03_-_Mission_Ready.mp3', 
     bpm: 120,
