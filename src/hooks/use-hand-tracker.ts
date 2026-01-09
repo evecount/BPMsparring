@@ -10,15 +10,17 @@ let animationFrameId: number;
 
 export function useHandTracker() {
   const [results, setResults] = useState<HandLandmarkerResult | null>(null);
-  const [loading, setLoading] = useState(true); // Start loading initially
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const isRunning = useRef(false);
 
   const createHandLandmarker = useCallback(async () => {
-    // Prevent re-running if an instance is already being created or exists
-    if (handLandmarker) return;
+    if (handLandmarker) {
+      setLoading(false);
+      return;
+    }
 
     setLoading(true);
     setError(null);
@@ -42,22 +44,17 @@ export function useHandTracker() {
     }
   }, []);
 
-  // Initialize on mount
   useEffect(() => {
     createHandLandmarker();
-  }, [createHandLandmarker]);
-  
-  // Cleanup on unmount
-  useEffect(() => {
     return () => {
       stopTracker();
       if (handLandmarker) {
         handLandmarker.close();
         handLandmarker = undefined;
       }
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [createHandLandmarker]);
 
   const predictWebcam = useCallback(() => {
     if (!isRunning.current || !handLandmarker || !videoRef.current) {
@@ -65,21 +62,13 @@ export function useHandTracker() {
     }
     
     const video = videoRef.current;
-    // Ensure the video is ready and has data
     if (video.paused || video.ended || !video.videoWidth) {
       animationFrameId = requestAnimationFrame(predictWebcam);
       return;
     }
 
-    // Only process if the video frame has changed.
-    const lastTime = video.dataset.lastTime ? parseFloat(video.dataset.lastTime) : -1;
-    if (video.currentTime === lastTime) {
-        animationFrameId = requestAnimationFrame(predictWebcam);
-        return;
-    }
-    video.dataset.lastTime = video.currentTime.toString();
-
-    const newResults = handLandmarker.detectForVideo(video, Date.now());
+    const startTimeMs = performance.now();
+    const newResults = handLandmarker.detectForVideo(video, startTimeMs);
     setResults(newResults);
 
     animationFrameId = requestAnimationFrame(predictWebcam);
@@ -89,14 +78,16 @@ export function useHandTracker() {
     if (isRunning.current) return;
     
     if (loading) {
-      // If landmarker is still loading, wait a bit and retry
       setTimeout(startTracker, 100);
       return;
     }
     
     if (!handLandmarker) {
-        setError("Hand tracking model could not be initialized. Please refresh the page.");
-        return;
+        await createHandLandmarker();
+    }
+     if (!handLandmarker) {
+      setError("Hand tracking model could not be initialized. Please refresh the page.");
+      return;
     }
     
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -119,7 +110,7 @@ export function useHandTracker() {
         console.error("Error accessing webcam:", err);
         setError("Camera access was denied. Please enable camera permissions in your browser settings.");
     }
-  }, [predictWebcam, loading]);
+  }, [predictWebcam, loading, createHandLandmarker]);
 
   const stopTracker = useCallback(() => {
     isRunning.current = false;
@@ -137,3 +128,5 @@ export function useHandTracker() {
 
   return { videoRef, canvasRef, results, loading, error, startTracker, stopTracker };
 }
+
+    

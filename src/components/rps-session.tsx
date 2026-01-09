@@ -9,6 +9,8 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent } from './ui/card';
+import { PUNCH_MAP, TARGET_POSITIONS, TARGET_RADIUS } from '@/lib/constants';
+import type { Handedness } from '@/lib/types';
 
 type GameState = 'initializing' | 'permission_denied' | 'ready' | 'countdown' | 'playing' | 'error';
 type Winner = 'user' | 'ai' | 'tie' | null;
@@ -23,10 +25,12 @@ export function RpsSession() {
   const [aiScore, setAiScore] = useState(0);
   const [countdown, setCountdown] = useState<number | null>(null);
 
+  const [activePunch, setActivePunch] = useState<string | null>(null);
+  const [lastHitTime, setLastHitTime] = useState<number>(0);
+
   const gameLoopRef = useRef<number>();
   const timeoutRef = useRef<NodeJS.Timeout>();
 
-  // Immediately request camera and start tracker on component mount
   useEffect(() => {
     const init = async () => {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -39,17 +43,11 @@ export function RpsSession() {
         return;
       }
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-        stream.getTracks().forEach(track => track.stop()); // Stop this initial stream, hook will start its own
-        startTracker(); // This will handle the stream and landmarker loading
+        await navigator.mediaDevices.getUserMedia({ video: true });
+        startTracker();
       } catch (err) {
         console.error("Camera permission denied on init:", err);
         setGameState('permission_denied');
-        toast({
-          variant: 'destructive',
-          title: 'Camera Access Denied',
-          description: 'Please enable camera permissions to start the session.',
-        });
       }
     };
     init();
@@ -60,10 +58,18 @@ export function RpsSession() {
       stopTracker();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stopTracker]);
+  }, []);
 
+  const chooseNextPunch = useCallback(() => {
+    // Simple logic: pick a random punch. Antigravity will make this smart.
+    const punchIds = Object.keys(PUNCH_MAP);
+    const nextPunch = punchIds[Math.floor(Math.random() * punchIds.length)];
+    setActivePunch(nextPunch);
+  }, []);
 
   const startGameRound = useCallback(() => {
+    setUserScore(0);
+    setAiScore(0); // Using as streak for now
     setCountdown(3);
     setGameState('countdown');
 
@@ -74,22 +80,46 @@ export function RpsSession() {
       if (count <= 0) {
         clearInterval(countdownInterval);
         setGameState('playing');
-        
-        timeoutRef.current = setTimeout(() => {
-          // Placeholder for game logic
-          console.log("Shoot!");
-          // Reset for next round
-          timeoutRef.current = setTimeout(startGameRound, 3000);
-
-        }, 1000); // 1 second to "shoot"
+        chooseNextPunch();
       }
     }, 1000);
-  }, []);
+  }, [chooseNextPunch]);
+
+  const checkHit = useCallback((hand: Handedness, x: number, y: number) => {
+    if (!activePunch) return;
+
+    const punchDetails = PUNCH_MAP[activePunch];
+    if (punchDetails.hand !== hand) return; // Wrong hand
+
+    const target = TARGET_POSITIONS[activePunch];
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    
+    const targetX = target.x * canvas.width;
+    const targetY = target.y * canvas.height;
+
+    // The video is flipped, so we must flip the x-coordinate of the hand.
+    const handX = (1 - x) * canvas.width;
+    const handY = y * canvas.height;
+
+    const distance = Math.sqrt(Math.pow(handX - targetX, 2) + Math.pow(handY - targetY, 2));
+
+    if (distance < TARGET_RADIUS) {
+      //debounce hits
+      if (Date.now() - lastHitTime > 500) { // 500ms debounce
+        console.log(`Hit detected for ${punchDetails.name}!`);
+        setUserScore(score => score + 1);
+        setLastHitTime(Date.now());
+        chooseNextPunch();
+      }
+    }
+  }, [activePunch, canvasRef, chooseNextPunch, lastHitTime]);
+
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
     const video = videoRef.current;
-    if (!canvas || !video || !results) return;
+    if (!canvas || !video) return;
 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
@@ -99,10 +129,61 @@ export function RpsSession() {
     
     ctx.save();
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    // No need to draw video on canvas, video is visible below it
+    
+    // Draw Active Target
+    if (gameState === 'playing' && activePunch) {
+      const pos = TARGET_POSITIONS[activePunch];
+      const x = pos.x * canvas.width;
+      const y = pos.y * canvas.height;
+      
+      ctx.beginPath();
+      ctx.arc(x, y, TARGET_RADIUS, 0, 2 * Math.PI);
+      ctx.fillStyle = 'hsla(var(--primary), 0.5)';
+      ctx.fill();
+      ctx.strokeStyle = 'hsl(var(--primary))';
+      ctx.lineWidth = 3;
+      ctx.stroke();
+
+      ctx.fillStyle = 'hsl(var(--primary-foreground))';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font = 'bold 24px Orbitron';
+      ctx.fillText(PUNCH_MAP[activePunch].name.toUpperCase(), x, y);
+    }
+    
+    // Draw Hand Landmarks and check for hits
+    if (results?.landmarks) {
+      for (const handLandmarks of results.landmarks) {
+        // Find the wrist landmark to determine handedness
+        const wrist = handLandmarks[0];
+        const handedness = results.handednesses[results.landmarks.indexOf(handLandmarks)][0].categoryName as Handedness;
+        
+        // We'll use the tip of the middle finger for hit detection
+        const fingerTip = handLandmarks[12]; 
+        if (fingerTip) {
+          checkHit(handedness, fingerTip.x, fingerTip.y);
+        }
+
+        // Draw connections
+        for (const connection of HandLandmarker.HAND_CONNECTIONS) {
+          const start = handLandmarks[connection.start];
+          const end = handLandmarks[connection.end];
+          if (start && end) {
+            ctx.beginPath();
+            // Flip horizontally for mirrored video
+            ctx.moveTo((1 - start.x) * canvas.width, start.y * canvas.height);
+            ctx.lineTo((1 - end.x) * canvas.width, end.y * canvas.height);
+            ctx.strokeStyle = 'hsl(var(--foreground))';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+          }
+        }
+      }
+    }
+    
     ctx.restore();
     
-  }, [canvasRef, videoRef, results]);
+  }, [canvasRef, videoRef, results, gameState, activePunch, checkHit]);
 
   const gameLoop = useCallback(() => {
     draw();
@@ -110,7 +191,6 @@ export function RpsSession() {
   }, [draw]);
 
   useEffect(() => {
-    // When tracker is no longer loading and not in an error state, it's ready.
     if (!loading && !error && gameState === 'initializing') {
       setGameState('ready');
       gameLoop();
@@ -123,7 +203,6 @@ export function RpsSession() {
   }, [error]);
 
   const handleStop = () => {
-    // This function might need to reset the app state more gracefully
     window.location.reload(); 
   };
 
@@ -133,14 +212,12 @@ export function RpsSession() {
   return (
     <>
       <div className={cn("w-full h-full flex flex-col items-center justify-center absolute inset-0 z-0 bg-black")}>
-         {/* Video and Canvas are always in the DOM */}
         <div className={cn("relative w-full h-full")}>
           <video ref={videoRef} className="absolute inset-0 w-full h-full object-cover z-10" style={{ transform: 'scaleX(-1)' }} playsInline autoPlay muted/>
           <canvas ref={canvasRef} className="absolute inset-0 w-full h-full object-cover z-20" />
         </div>
       </div>
       
-      {/* UI Overlay */}
       <div className="absolute inset-0 z-30 flex flex-col items-center justify-center p-4">
         
         {gameState === 'initializing' && (
@@ -185,7 +262,6 @@ export function RpsSession() {
             </div>
 
             <div className="absolute inset-0 z-20 flex flex-col items-center justify-between p-8 pointer-events-none">
-              {/* Scoreboard */}
               <div className="w-full grid grid-cols-2 gap-4 max-w-sm">
                   <Card className="glass-panel">
                     <CardContent className="p-4 flex flex-col items-center">
@@ -201,12 +277,10 @@ export function RpsSession() {
                   </Card>
               </div>
               
-              {/* Game State Display */}
               <div className="flex flex-col items-center">
                 {gameState === 'countdown' && <div className="text-9xl font-bold animate-ping">{countdown}</div>}
               </div>
 
-              {/* Empty div for spacing */}
               <div></div>
             </div>
           </>
@@ -224,3 +298,5 @@ export function RpsSession() {
     </>
   );
 }
+
+    
