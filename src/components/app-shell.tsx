@@ -3,7 +3,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { LogIn, LogOut } from 'lucide-react';
+import { LogIn, LogOut, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Logo } from './icons';
 import { useUser } from '@/firebase';
@@ -24,7 +24,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <Logo className="h-6 w-6" />
           <span className="hidden sm:inline-block">ANTIGRAVITY-ZERO</span>
         </Link>
-        <div>
+        <div className="flex items-center gap-4">
+          <Link
+            href="/about"
+            className={cn(
+              'flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground'
+            )}
+          >
+            <Info className="h-4 w-4" />
+            <span>About</span>
+          </Link>
+
           {!isUserLoading && (
             <>
               {user ? (
