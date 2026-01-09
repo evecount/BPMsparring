@@ -10,8 +10,11 @@ import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent } from './ui/card';
 import { PUNCH_MAP, TARGET_POSITIONS, TARGET_RADIUS } from '@/lib/constants';
-import type { Handedness } from '@/lib/types';
+import type { Handedness, BeatMap } from '@/lib/types';
 import { HandLandmarker } from '@mediapipe/tasks-vision';
+import { MUSIC_TRACKS } from '@/lib/beat-maps';
+import { Label } from './ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 
 type GameState = 'initializing' | 'permission_denied' | 'ready' | 'countdown' | 'playing' | 'error';
 type Winner = 'user' | 'ai' | 'tie' | null;
@@ -28,6 +31,9 @@ export function RpsSession() {
 
   const [activePunch, setActivePunch] = useState<string | null>(null);
   const [lastHitTime, setLastHitTime] = useState<number>(0);
+  
+  const [selectedTrack, setSelectedTrack] = useState<BeatMap>(MUSIC_TRACKS[0]);
+  const audioRef = useRef<HTMLAudioElement>(null);
 
   const gameLoopRef = useRef<number>();
   const timeoutRef = useRef<NodeJS.Timeout>();
@@ -57,6 +63,9 @@ export function RpsSession() {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
       if (gameLoopRef.current) cancelAnimationFrame(gameLoopRef.current);
       stopTracker();
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -67,12 +76,22 @@ export function RpsSession() {
     const nextPunch = punchIds[Math.floor(Math.random() * punchIds.length)];
     setActivePunch(nextPunch);
   }, []);
+  
+  const handleMusicSelection = (trackName: string) => {
+    const track = MUSIC_TRACKS.find(t => t.name === trackName) || MUSIC_TRACKS[0];
+    setSelectedTrack(track);
+  };
 
   const startGameRound = useCallback(() => {
     setUserScore(0);
     setAiScore(0); // Using as streak for now
     setCountdown(3);
     setGameState('countdown');
+
+    if (audioRef.current && selectedTrack.src !== 'none') {
+        audioRef.current.src = selectedTrack.src;
+        audioRef.current.load();
+    }
 
     let count = 3;
     const countdownInterval = setInterval(() => {
@@ -81,10 +100,17 @@ export function RpsSession() {
       if (count <= 0) {
         clearInterval(countdownInterval);
         setGameState('playing');
-        chooseNextPunch();
+        if (audioRef.current && selectedTrack.src !== 'none') {
+            audioRef.current.play().catch(e => console.error("Audio play failed:", e));
+        }
+
+        // If it's not a choreographed track, start the AI punch chooser
+        if (selectedTrack.punches.length === 0) {
+          chooseNextPunch();
+        }
       }
     }, 1000);
-  }, [chooseNextPunch]);
+  }, [chooseNextPunch, selectedTrack]);
 
   const checkHit = useCallback((hand: Handedness, x: number, y: number) => {
     if (!activePunch) return;
@@ -111,10 +137,15 @@ export function RpsSession() {
         console.log(`Hit detected for ${punchDetails.name}!`);
         setUserScore(score => score + 1);
         setLastHitTime(Date.now());
-        chooseNextPunch();
+
+        if (selectedTrack.punches.length === 0) {
+          chooseNextPunch();
+        } else {
+            setActivePunch(null); // Hide target until next beat
+        }
       }
     }
-  }, [activePunch, canvasRef, chooseNextPunch, lastHitTime]);
+  }, [activePunch, canvasRef, chooseNextPunch, lastHitTime, selectedTrack.punches.length]);
 
 
   const draw = useCallback(() => {
@@ -131,6 +162,19 @@ export function RpsSession() {
     ctx.save();
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
+    // Choreographed punches
+    if (gameState === 'playing' && audioRef.current && selectedTrack.punches.length > 0) {
+      const currentTime = audioRef.current.currentTime - selectedTrack.offset;
+      const currentBeat = (currentTime * selectedTrack.bpm) / 60;
+      
+      const upcomingPunch = selectedTrack.punches.find(p => p.beat > currentBeat - 0.5 && p.beat < currentBeat + 1);
+
+      if (upcomingPunch && activePunch !== upcomingPunch.type) {
+        setActivePunch(upcomingPunch.type);
+      }
+    }
+
+
     // Draw Active Target
     if (gameState === 'playing' && activePunch) {
       const pos = TARGET_POSITIONS[activePunch];
@@ -184,7 +228,7 @@ export function RpsSession() {
     
     ctx.restore();
     
-  }, [canvasRef, videoRef, results, gameState, activePunch, checkHit]);
+  }, [canvasRef, videoRef, results, gameState, activePunch, checkHit, selectedTrack]);
 
   const gameLoop = useCallback(() => {
     draw();
@@ -212,6 +256,7 @@ export function RpsSession() {
 
   return (
     <>
+      <audio ref={audioRef} />
       <div className={cn("w-full h-full flex flex-col items-center justify-center absolute inset-0 z-0 bg-black")}>
         <div className={cn("relative w-full h-full")}>
           <video ref={videoRef} className="absolute inset-0 w-full h-full object-cover z-10" style={{ transform: 'scaleX(-1)' }} playsInline autoPlay muted/>
@@ -236,6 +281,21 @@ export function RpsSession() {
             <p className="mt-4 text-lg sm:text-xl text-foreground/80">
               You are entering a reactive feedback loop. The system syncs with your physical state, not a button click. This is a test of a new AI paradigm.
             </p>
+             <div className="mt-8 grid w-full max-w-sm items-center gap-1.5 mx-auto">
+                <Label htmlFor="music-track" className="text-left">Select Music Track</Label>
+                 <Select onValueChange={handleMusicSelection} defaultValue={selectedTrack.name}>
+                    <SelectTrigger id="music-track">
+                        <SelectValue placeholder="Select a track" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {MUSIC_TRACKS.map(track => (
+                            <SelectItem key={track.name} value={track.name}>
+                                {track.name}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+            </div>
             <Button size="lg" className="mt-8" onClick={startGameRound} variant="destructive">
               <Play className="mr-2 h-4 w-4" />
               Begin Synchronization
