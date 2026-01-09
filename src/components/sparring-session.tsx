@@ -16,6 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { MUSIC_TRACKS } from '@/lib/beat-maps';
 import { Textarea } from '@/components/ui/textarea';
 import { SparringContext } from '@/context/SparringContext';
+import { cn } from '@/lib/utils';
 
 const initialStats: SparringStats = { score: 0, punches: 0, accuracy: 0, streak: 0, bestStreak: 0, avgSpeed: 0 };
 
@@ -326,7 +327,7 @@ export function SparringSession() {
 
   useEffect(() => {
     if (sessionState === 'running') {
-      gameLoopRef.current = requestAnimationFrame(gameLoop);
+      gameLoop();
     } else {
       if (gameLoopRef.current) cancelAnimationFrame(gameLoopRef.current);
     }
@@ -365,19 +366,34 @@ export function SparringSession() {
     if(track) setSelectedMusic(track);
   };
 
-  const renderContent = () => {
-    if (sessionState === 'error') {
-      return (
-        <Alert variant="destructive" className="max-w-md glass-panel">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>An Error Occurred</AlertTitle>
-          <AlertDescription>{error || 'Something went wrong. Please refresh and try again.'}</AlertDescription>
-        </Alert>
-      );
-    }
+  const isSessionActive = sessionState === 'running' || sessionState === 'starting' || sessionState === 'paused' || loading;
 
-    if (sessionState === 'idle') {
-      return (
+  return (
+    <>
+      <div className={cn("w-full h-full flex flex-col items-center justify-center bg-black/50 absolute inset-0 z-10", isSessionActive ? "flex" : "hidden")}>
+        <div className="relative w-full h-full">
+          {(sessionState === 'starting' || loading) && (
+            <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center z-30">
+              <Loader2 className="w-16 h-16 animate-spin text-primary" />
+              <p className="text-primary-foreground mt-4 text-lg">Starting camera & loading AI model...</p>
+            </div>
+          )}
+          <video ref={videoRef} className="absolute inset-0 w-full h-full object-cover z-10" style={{ transform: 'scaleX(-1)' }} playsInline />
+          <canvas ref={canvasRef} className="absolute inset-0 w-full h-full object-cover z-20" />
+          {isSessionActive && (
+             <div className="absolute top-4 left-4 z-30 flex gap-2">
+                <Button size="icon" onClick={handleStop} variant="destructive">
+                  <X />
+                </Button>
+                <Button size="icon" onClick={handlePause}>
+                  {sessionState === 'paused' ? <Play /> : <Pause />}
+                </Button>
+              </div>
+          )}
+        </div>
+      </div>
+      
+      {sessionState === 'idle' && !loading && (
         <div className="text-center p-4 max-w-2xl mx-auto">
           <h1 className="text-4xl font-bold tracking-tight">Ready to Train?</h1>
           <p className="mt-2 text-lg text-foreground">
@@ -448,32 +464,15 @@ export function SparringSession() {
           </Button>
           <audio ref={audioRef} />
         </div>
-      );
-    }
-
-    return (
-      <div className="w-full h-full flex flex-col items-center justify-center bg-black/50">
-        <div className="relative w-full h-full">
-          {(sessionState === 'starting' || loading) && (
-            <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center z-20">
-              <Loader2 className="w-16 h-16 animate-spin text-primary" />
-              <p className="text-primary-foreground mt-4 text-lg">Starting camera & loading AI model...</p>
-            </div>
-          )}
-          <video ref={videoRef} className="absolute inset-0 w-full h-full object-cover" style={{ transform: 'scaleX(-1)' }} playsInline />
-          <canvas ref={canvasRef} className="absolute inset-0 w-full h-full object-cover" />
-          <div className="absolute top-4 left-4 z-10 flex gap-2">
-            <Button size="icon" onClick={handleStop} variant="destructive">
-              <X />
-            </Button>
-            <Button size="icon" onClick={handlePause}>
-              {sessionState === 'paused' ? <Play /> : <Pause />}
-            </Button>
-          </div>
-        </div>
-      </div>
-    );
-  };
-  
-  return renderContent();
+      )}
+      
+      {sessionState === 'error' && (
+        <Alert variant="destructive" className="max-w-md glass-panel">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>An Error Occurred</AlertTitle>
+          <AlertDescription>{error || 'Something went wrong. Please refresh and try again.'}</AlertDescription>
+        </Alert>
+      )}
+    </>
+  );
 }
