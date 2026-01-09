@@ -10,35 +10,37 @@ let animationFrameId: number;
 
 export function useHandTracker() {
   const [results, setResults] = useState<HandLandmarkerResult | null>(null);
-  const [loading, setLoading] = useState(false); // Default to false
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const isRunning = useRef(false);
 
   const createHandLandmarker = useCallback(async () => {
+    // Prevent re-running if an instance is already being created or exists
+    if (handLandmarker || loading) return;
+
     setLoading(true);
+    setError(null);
     try {
-      if (!handLandmarker) {
-        const vision = await FilesetResolver.forVisionTasks(
-          "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
-        );
-        handLandmarker = await HandLandmarker.createFromOptions(vision, {
-          baseOptions: {
-            modelAssetPath: HAND_TRACKER_MODEL_PATH,
-            delegate: "GPU",
-          },
-          runningMode: "VIDEO",
-          numHands: 2,
-        });
-      }
+      const vision = await FilesetResolver.forVisionTasks(
+        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
+      );
+      handLandmarker = await HandLandmarker.createFromOptions(vision, {
+        baseOptions: {
+          modelAssetPath: HAND_TRACKER_MODEL_PATH,
+          delegate: "GPU",
+        },
+        runningMode: "VIDEO",
+        numHands: 2,
+      });
     } catch (e: any) {
       console.error("Error creating HandLandmarker:", e);
-      setError("Failed to load AI model. Please check your connection and try again.");
+      setError("Failed to load AI model. Your browser might not be supported, or there could be a network issue.");
     } finally {
-        setLoading(false);
+      setLoading(false);
     }
-  }, []);
+  }, [loading]);
 
   // Initialize on mount
   useEffect(() => {
@@ -63,12 +65,15 @@ export function useHandTracker() {
     }
     
     const video = videoRef.current;
-    if (video.paused || video.ended || video.readyState < 2) {
+    // Ensure the video is ready and has data
+    if (video.paused || video.ended || !video.videoWidth) {
       animationFrameId = requestAnimationFrame(predictWebcam);
       return;
     }
 
-    if (video.currentTime === (video.dataset.lastTime ? parseFloat(video.dataset.lastTime) : 0)) {
+    // Only process if the video frame has changed.
+    const lastTime = video.dataset.lastTime ? parseFloat(video.dataset.lastTime) : -1;
+    if (video.currentTime === lastTime) {
         animationFrameId = requestAnimationFrame(predictWebcam);
         return;
     }
@@ -82,9 +87,16 @@ export function useHandTracker() {
 
   const startTracker = useCallback(async () => {
     if (isRunning.current) return;
+    
+    // Create the landmarker if it doesn't exist.
     if (!handLandmarker) {
-      setError("Hand tracking model is not yet ready. Please wait.");
-      return;
+      await createHandLandmarker();
+    }
+    
+    // Now check again after attempting to create it.
+    if (!handLandmarker) {
+        setError("Hand tracking model could not be initialized. Please refresh the page.");
+        return;
     }
     
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -101,21 +113,22 @@ export function useHandTracker() {
             videoRef.current.srcObject = stream;
             videoRef.current.addEventListener("loadeddata", () => {
                 isRunning.current = true;
-                setLoading(false);
+                setLoading(false); // Stop loading ONLY when data is loaded
                 predictWebcam();
             });
         }
     } catch (err: any) {
         console.error("Error accessing webcam:", err);
-        setError("Camera access was denied. Please enable camera permissions in your browser settings and refresh the page.");
+        setError("Camera access was denied. Please enable camera permissions in your browser settings.");
         setLoading(false);
     }
-
-  }, [predictWebcam]);
+  }, [predictWebcam, createHandLandmarker]);
 
   const stopTracker = useCallback(() => {
     isRunning.current = false;
-    cancelAnimationFrame(animationFrameId);
+    if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+    }
 
     if (videoRef.current && videoRef.current.srcObject) {
       const stream = videoRef.current.srcObject as MediaStream;
@@ -127,5 +140,3 @@ export function useHandTracker() {
 
   return { videoRef, canvasRef, results, loading, error, startTracker, stopTracker };
 }
-
-    
