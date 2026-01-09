@@ -11,22 +11,22 @@ import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent } from './ui/card';
 import { PUNCH_MAP, TARGET_POSITIONS, TARGET_RADIUS } from '@/lib/constants';
 import type { Handedness, BeatMap } from '@/lib/types';
-import { HandLandmarker } from '@mediapipe/tasks-vision';
+import { HandLandmarker, HandLandmarkerResult } from '@mediapipe/tasks-vision';
 import { MUSIC_TRACKS } from '@/lib/beat-maps';
 import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 
-type GameState = 'initializing' | 'permission_denied' | 'ready' | 'countdown' | 'playing' | 'error';
-type Winner = 'user' | 'ai' | 'tie' | null;
-
+type GameState = 'initializing' | 'ready' | 'countdown' | 'playing' | 'error' | 'permission_denied';
 
 export function RpsSession() {
-  const { videoRef, canvasRef, results, loading, error, startTracker, stopTracker } = useHandTracker();
-  const [gameState, setGameState] = useState<GameState>('initializing');
   const { toast } = useToast();
+  const { videoRef, canvasRef, handLandmarker, loading: modelLoading, error: modelError } = useHandTracker();
   
+  const [gameState, setGameState] = useState<GameState>('initializing');
+  const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
+
   const [userScore, setUserScore] = useState(0);
-  const [aiScore, setAiScore] = useState(0);
+  const [aiScore, setAiScore] = useState(0); // Using as streak
   const [countdown, setCountdown] = useState<number | null>(null);
 
   const [activePunch, setActivePunch] = useState<string | null>(null);
@@ -36,38 +36,201 @@ export function RpsSession() {
   const audioRef = useRef<HTMLAudioElement>(null);
 
   const gameLoopRef = useRef<number>();
-  const timeoutRef = useRef<NodeJS.Timeout>();
+  const isRunning = useRef(false);
 
+  // 1. Effect for Camera Permissions
   useEffect(() => {
-    startTracker();
-
-    return () => {
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
-      if (gameLoopRef.current) cancelAnimationFrame(gameLoopRef.current);
-      stopTracker();
-      if (audioRef.current) {
-        audioRef.current.pause();
+    const getCameraPermission = async () => {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        setGameState('error');
+        setHasCameraPermission(false);
+        console.error("Camera access is not supported by this browser.");
+        return;
+      }
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 } });
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.addEventListener('loadeddata', () => {
+             setHasCameraPermission(true);
+             isRunning.current = true;
+          });
+        }
+      } catch (error) {
+        console.error('Error accessing camera:', error);
+        setHasCameraPermission(false);
+        setGameState('permission_denied');
       }
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
-  useEffect(() => {
-    if (error) {
-      if(error.includes("denied")) {
-        setGameState('permission_denied');
-      } else {
-        setGameState('error');
-      }
-    }
-  }, [error]);
+    getCameraPermission();
+
+     return () => {
+        if (videoRef.current && videoRef.current.srcObject) {
+            const stream = videoRef.current.srcObject as MediaStream;
+            stream.getTracks().forEach(track => track.stop());
+        }
+     }
+  }, [videoRef]);
 
   const chooseNextPunch = useCallback(() => {
-    // Simple logic: pick a random punch. Antigravity will make this smart.
     const punchIds = Object.keys(PUNCH_MAP);
     const nextPunch = punchIds[Math.floor(Math.random() * punchIds.length)];
     setActivePunch(nextPunch);
   }, []);
+
+  const checkHit = useCallback((handedness: Handedness, x: number, y: number, currentActivePunch: string | null, canvas: HTMLCanvasElement) => {
+    if (!currentActivePunch) return;
+
+    const punchDetails = PUNCH_MAP[currentActivePunch];
+    if (punchDetails.hand !== handedness) return; // Wrong hand
+
+    const target = TARGET_POSITIONS[currentActivePunch];
+    
+    const targetX = target.x * canvas.width;
+    const targetY = target.y * canvas.height;
+
+    // The video is flipped, so we must flip the x-coordinate of the hand.
+    const handX = (1 - x) * canvas.width;
+    const handY = y * canvas.height;
+
+    const distance = Math.sqrt(Math.pow(handX - targetX, 2) + Math.pow(handY - targetY, 2));
+
+    if (distance < TARGET_RADIUS) {
+      if (Date.now() - lastHitTime > 500) { // 500ms debounce
+        setUserScore(score => score + 1);
+        setLastHitTime(Date.now());
+
+        if (selectedTrack.punches.length === 0) {
+          chooseNextPunch();
+        } else {
+          setActivePunch(null); // Hide target until next beat
+        }
+      }
+    }
+  }, [lastHitTime, chooseNextPunch, selectedTrack.punches.length]);
+  
+  const draw = useCallback((results: HandLandmarkerResult | null) => {
+    const canvas = canvasRef.current;
+    const video = videoRef.current;
+    if (!canvas || !video) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    
+    ctx.save();
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    let currentActivePunch = activePunch;
+
+    if (gameState === 'playing' && audioRef.current && selectedTrack.punches.length > 0) {
+      const currentTime = audioRef.current.currentTime - selectedTrack.offset;
+      const currentBeat = (currentTime * selectedTrack.bpm) / 60;
+      
+      const upcomingPunch = selectedTrack.punches.find(p => p.beat > currentBeat - 0.5 && p.beat < currentBeat + 1);
+
+      if (upcomingPunch && activePunch !== upcomingPunch.type) {
+        currentActivePunch = upcomingPunch.type;
+        setActivePunch(upcomingPunch.type);
+      }
+    }
+
+    if (gameState === 'playing' && currentActivePunch) {
+      const pos = TARGET_POSITIONS[currentActivePunch];
+      const x = pos.x * canvas.width;
+      const y = pos.y * canvas.height;
+      
+      ctx.beginPath();
+      ctx.arc(x, y, TARGET_RADIUS, 0, 2 * Math.PI);
+      ctx.fillStyle = 'hsla(var(--primary), 0.5)';
+      ctx.fill();
+      ctx.strokeStyle = 'hsl(var(--primary))';
+      ctx.lineWidth = 3;
+      ctx.stroke();
+
+      ctx.fillStyle = 'hsl(var(--primary-foreground))';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font = 'bold 24px Orbitron';
+      ctx.fillText(PUNCH_MAP[currentActivePunch].name.toUpperCase(), x, y);
+    }
+    
+    if (results?.landmarks) {
+      for (const handLandmarks of results.landmarks) {
+        const handedness = results.handednesses[results.landmarks.indexOf(handLandmarks)][0].categoryName as Handedness;
+        const fingerTip = handLandmarks[12]; 
+        if (fingerTip) {
+          checkHit(handedness, fingerTip.x, fingerTip.y, currentActivePunch, canvas);
+        }
+        for (const connection of HandLandmarker.HAND_CONNECTIONS) {
+          const start = handLandmarks[connection.start];
+          const end = handLandmarks[connection.end];
+          if (start && end) {
+            ctx.beginPath();
+            ctx.moveTo((1 - start.x) * canvas.width, start.y * canvas.height);
+            ctx.lineTo((1 - end.x) * canvas.width, end.y * canvas.height);
+            ctx.strokeStyle = 'hsl(var(--foreground))';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+          }
+        }
+      }
+    }
+    
+    ctx.restore();
+    
+  }, [canvasRef, videoRef, gameState, activePunch, checkHit, selectedTrack]);
+
+  const predictWebcam = useCallback(() => {
+    if (!isRunning.current || !handLandmarker || !videoRef.current || hasCameraPermission === false) {
+      return;
+    }
+    
+    const video = videoRef.current;
+    if (video.paused || video.ended || !video.videoWidth) {
+      gameLoopRef.current = requestAnimationFrame(predictWebcam);
+      return;
+    }
+
+    const startTimeMs = performance.now();
+    const results = handLandmarker.detectForVideo(video, startTimeMs);
+    
+    // Draw and check for hits
+    draw(results);
+    
+    gameLoopRef.current = requestAnimationFrame(predictWebcam);
+  }, [handLandmarker, hasCameraPermission, draw]);
+
+
+  // 2. Effect to Start Game Loop once camera and model are ready
+  useEffect(() => {
+    if (hasCameraPermission && !modelLoading && handLandmarker) {
+      if (gameState === 'initializing') {
+        setGameState('ready');
+      }
+      predictWebcam();
+    }
+    
+    return () => {
+        if(gameLoopRef.current) {
+            cancelAnimationFrame(gameLoopRef.current);
+            isRunning.current = false;
+        }
+    }
+  }, [hasCameraPermission, modelLoading, handLandmarker, gameState, predictWebcam]);
+
+
+  // Handle model loading errors
+   useEffect(() => {
+    if (modelError) {
+      setGameState('error');
+    }
+  }, [modelError]);
+
+
   
   const handleMusicSelection = (trackName: string) => {
     const track = MUSIC_TRACKS.find(t => t.name === trackName) || MUSIC_TRACKS[0];
@@ -76,7 +239,7 @@ export function RpsSession() {
 
   const startGameRound = useCallback(() => {
     setUserScore(0);
-    setAiScore(0); // Using as streak for now
+    setAiScore(0);
     setCountdown(3);
     setGameState('countdown');
   
@@ -84,9 +247,6 @@ export function RpsSession() {
       audioRef.current.pause();
       if (selectedTrack.src !== 'none') {
         audioRef.current.src = selectedTrack.src;
-        audioRef.current.load();
-      } else {
-        audioRef.current.removeAttribute('src');
       }
     }
   
@@ -108,141 +268,9 @@ export function RpsSession() {
     }, 1000);
   }, [chooseNextPunch, selectedTrack]);
 
-  const checkHit = useCallback((hand: Handedness, x: number, y: number) => {
-    if (!activePunch) return;
-
-    const punchDetails = PUNCH_MAP[activePunch];
-    if (punchDetails.hand !== hand) return; // Wrong hand
-
-    const target = TARGET_POSITIONS[activePunch];
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    
-    const targetX = target.x * canvas.width;
-    const targetY = target.y * canvas.height;
-
-    // The video is flipped, so we must flip the x-coordinate of the hand.
-    const handX = (1 - x) * canvas.width;
-    const handY = y * canvas.height;
-
-    const distance = Math.sqrt(Math.pow(handX - targetX, 2) + Math.pow(handY - targetY, 2));
-
-    if (distance < TARGET_RADIUS) {
-      //debounce hits
-      if (Date.now() - lastHitTime > 500) { // 500ms debounce
-        console.log(`Hit detected for ${punchDetails.name}!`);
-        setUserScore(score => score + 1);
-        setLastHitTime(Date.now());
-
-        if (selectedTrack.punches.length === 0) {
-          chooseNextPunch();
-        } else {
-            setActivePunch(null); // Hide target until next beat
-        }
-      }
-    }
-  }, [activePunch, canvasRef, chooseNextPunch, lastHitTime, selectedTrack.punches.length]);
-
-
-  const draw = useCallback(() => {
-    const canvas = canvasRef.current;
-    const video = videoRef.current;
-    if (!canvas || !video) return;
-
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    
-    ctx.save();
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    
-    // Choreographed punches
-    if (gameState === 'playing' && audioRef.current && selectedTrack.punches.length > 0) {
-      const currentTime = audioRef.current.currentTime - selectedTrack.offset;
-      const currentBeat = (currentTime * selectedTrack.bpm) / 60;
-      
-      const upcomingPunch = selectedTrack.punches.find(p => p.beat > currentBeat - 0.5 && p.beat < currentBeat + 1);
-
-      if (upcomingPunch && activePunch !== upcomingPunch.type) {
-        setActivePunch(upcomingPunch.type);
-      }
-    }
-
-
-    // Draw Active Target
-    if (gameState === 'playing' && activePunch) {
-      const pos = TARGET_POSITIONS[activePunch];
-      const x = pos.x * canvas.width;
-      const y = pos.y * canvas.height;
-      
-      ctx.beginPath();
-      ctx.arc(x, y, TARGET_RADIUS, 0, 2 * Math.PI);
-      ctx.fillStyle = 'hsla(var(--primary), 0.5)';
-      ctx.fill();
-      ctx.strokeStyle = 'hsl(var(--primary))';
-      ctx.lineWidth = 3;
-      ctx.stroke();
-
-      ctx.fillStyle = 'hsl(var(--primary-foreground))';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.font = 'bold 24px Orbitron';
-      ctx.fillText(PUNCH_MAP[activePunch].name.toUpperCase(), x, y);
-    }
-    
-    // Draw Hand Landmarks and check for hits
-    if (results?.landmarks) {
-      for (const handLandmarks of results.landmarks) {
-        // Find the wrist landmark to determine handedness
-        const wrist = handLandmarks[0];
-        const handedness = results.handednesses[results.landmarks.indexOf(handLandmarks)][0].categoryName as Handedness;
-        
-        // We'll use the tip of the middle finger for hit detection
-        const fingerTip = handLandmarks[12]; 
-        if (fingerTip) {
-          checkHit(handedness, fingerTip.x, fingerTip.y);
-        }
-
-        // Draw connections
-        for (const connection of HandLandmarker.HAND_CONNECTIONS) {
-          const start = handLandmarks[connection.start];
-          const end = handLandmarks[connection.end];
-          if (start && end) {
-            ctx.beginPath();
-            // Flip horizontally for mirrored video
-            ctx.moveTo((1 - start.x) * canvas.width, start.y * canvas.height);
-            ctx.lineTo((1 - end.x) * canvas.width, end.y * canvas.height);
-            ctx.strokeStyle = 'hsl(var(--foreground))';
-            ctx.lineWidth = 2;
-            ctx.stroke();
-          }
-        }
-      }
-    }
-    
-    ctx.restore();
-    
-  }, [canvasRef, videoRef, results, gameState, activePunch, checkHit, selectedTrack]);
-
-  const gameLoop = useCallback(() => {
-    draw();
-    gameLoopRef.current = requestAnimationFrame(gameLoop);
-  }, [draw]);
-
-  useEffect(() => {
-    if (!loading && !error && gameState === 'initializing') {
-      setGameState('ready');
-      gameLoop();
-    }
-  }, [loading, error, gameState, gameLoop]);
-
-
   const handleStop = () => {
     window.location.reload(); 
   };
-
 
   const isSessionActive = ['countdown', 'playing'].includes(gameState);
 
@@ -258,16 +286,16 @@ export function RpsSession() {
       
       <div className="absolute inset-0 z-30 flex flex-col items-center justify-center p-4">
         
-        {gameState === 'initializing' && (
+        {(gameState === 'initializing' || modelLoading || hasCameraPermission === null) && !isSessionActive && (
           <div className="flex flex-col items-center justify-center text-center">
             <Loader2 className="w-16 h-16 animate-spin text-primary" />
             <p className="text-foreground mt-4 text-lg">
-              Initializing Bio-Temporal Link...
+              {hasCameraPermission === null ? 'Requesting Camera...' : 'Initializing Bio-Temporal Link...'}
             </p>
           </div>
         )}
 
-        {gameState === 'ready' && (
+        {gameState === 'ready' && hasCameraPermission && (
            <div className="text-center p-4 max-w-2xl mx-auto glass-panel rounded-lg">
             <h1 className="text-4xl sm:text-5xl font-bold tracking-tight text-primary">Engage the Edge of Now</h1>
             <p className="mt-4 text-lg sm:text-xl text-foreground/80">
@@ -304,7 +332,6 @@ export function RpsSession() {
               </p>
            </div>
         )}
-
 
         {isSessionActive && (
           <>
@@ -343,12 +370,13 @@ export function RpsSession() {
           <Alert variant="destructive" className="max-w-md glass-panel">
             <AlertCircle className="h-4 w-4" />
             <AlertTitle>An Error Occurred</AlertTitle>
-            <AlertDescription>{error || 'Something went wrong. Please refresh and try again.'}</AlertDescription>
+            <AlertDescription>{modelError || 'Something went wrong. Please refresh and try again.'}</AlertDescription>
             <Button onClick={() => window.location.reload()} className="mt-4">Refresh Page</Button>
           </Alert>
         )}
       </div>
     </>
   );
+}
 
     
