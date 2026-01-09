@@ -87,12 +87,17 @@ export function RpsSession() {
     setAiScore(0); // Using as streak for now
     setCountdown(3);
     setGameState('countdown');
-
-    if (audioRef.current && selectedTrack.src !== 'none') {
+  
+    if (audioRef.current) {
+      audioRef.current.pause();
+      if (selectedTrack.src !== 'none') {
         audioRef.current.src = selectedTrack.src;
-        audioRef.current.load();
+        audioRef.current.load(); // This can trigger the error if src is invalid
+      } else {
+        audioRef.current.removeAttribute('src'); // Clear src for no music mode
+      }
     }
-
+  
     let count = 3;
     const countdownInterval = setInterval(() => {
       count--;
@@ -101,10 +106,9 @@ export function RpsSession() {
         clearInterval(countdownInterval);
         setGameState('playing');
         if (audioRef.current && selectedTrack.src !== 'none') {
-            audioRef.current.play().catch(e => console.error("Audio play failed:", e));
+          audioRef.current.play().catch(e => console.error("Audio play failed:", e));
         }
-
-        // If it's not a choreographed track, start the AI punch chooser
+  
         if (selectedTrack.punches.length === 0) {
           chooseNextPunch();
         }
