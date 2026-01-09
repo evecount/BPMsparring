@@ -3,8 +3,11 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 
 export default function AboutPage() {
   return (
-    <div className="flex-1 flex flex-col items-center justify-start p-4 sm:p-6 md:p-8">
-      <Card className="w-full max-w-4xl glass-panel">
+    <div 
+      className="flex-1 flex flex-col items-center justify-start p-4 sm:p-6 md:p-8"
+      style={{ textShadow: 'none', color: 'white' }}
+    >
+      <Card className="w-full max-w-4xl glass-panel" style={{ color: 'hsl(var(--card-foreground))' }}>
         <CardHeader>
           <CardTitle className="text-3xl font-bold text-center">The Philosophy: Reactive AI</CardTitle>
           <CardDescription className="text-center text-lg text-foreground/80 pt-2">
