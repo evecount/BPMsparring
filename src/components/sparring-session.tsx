@@ -53,28 +53,33 @@ export function SparringSession() {
   const nextComboTimeout = useRef<NodeJS.Timeout | null>(null);
   const currentTargetIndex = useRef(0);
 
-  const getCameraPermission = async () => {
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      setError("Camera access is not supported by your browser.");
-      setHasCameraPermission(false);
-      return false;
-    }
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-      stream.getTracks().forEach(track => track.stop()); // Stop the stream immediately, we just wanted permission
-      setHasCameraPermission(true);
-      return true;
-    } catch (error) {
-      console.error('Error accessing camera:', error);
-      setHasCameraPermission(false);
-      toast({
-        variant: 'destructive',
-        title: 'Camera Access Denied',
-        description: 'Please enable camera permissions in your browser settings to use this feature.',
-      });
-      return false;
-    }
-  };
+  useEffect(() => {
+    const getCameraPermission = async () => {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        setError("Camera access is not supported by your browser.");
+        setHasCameraPermission(false);
+        return;
+      }
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        setHasCameraPermission(true);
+        // We have permission, but we don't need the stream now. Stop it.
+        // The tracker will request it again when started.
+        stream.getTracks().forEach(track => track.stop());
+      } catch (error) {
+        console.error('Error accessing camera:', error);
+        setHasCameraPermission(false);
+        toast({
+          variant: 'destructive',
+          title: 'Camera Access Denied',
+          description: 'Please enable camera permissions in your browser settings to use this app.',
+        });
+      }
+    };
+
+    getCameraPermission();
+  }, [toast]);
+
 
   const resetSession = () => {
     if (setSessionStats) setSessionStats(initialStats);
@@ -89,9 +94,13 @@ export function SparringSession() {
 
   const handleStart = async () => {
     if (!setSessionState) return;
-
-    const permissionGranted = await getCameraPermission();
-    if (!permissionGranted) {
+    
+    if(!hasCameraPermission) {
+      toast({
+        variant: 'destructive',
+        title: 'Cannot Start Session',
+        description: 'Camera permissions are required. Please grant access and refresh the page.',
+      });
       return;
     }
     
@@ -411,8 +420,10 @@ export function SparringSession() {
               <p className="text-primary-foreground mt-4 text-lg">Starting camera & loading AI model...</p>
             </div>
           )}
-          <video ref={videoRef} className="absolute inset-0 w-full h-full object-cover z-10" style={{ transform: 'scaleX(-1)' }} playsInline autoPlay muted/>
-          <canvas ref={canvasRef} className="absolute inset-0 w-full h-full object-cover z-20" />
+          
+          <video ref={videoRef} className={cn("absolute inset-0 w-full h-full object-cover z-10", {"hidden": !isSessionActive})} style={{ transform: 'scaleX(-1)' }} playsInline autoPlay muted/>
+          <canvas ref={canvasRef} className={cn("absolute inset-0 w-full h-full object-cover z-20", {"hidden": !isSessionActive})} />
+
           {isSessionActive && (
              <div className="absolute top-4 left-4 z-30 flex gap-2">
                 <Button size="icon" onClick={handleStop} variant="destructive">
@@ -503,10 +514,19 @@ export function SparringSession() {
             </Card>
           </div>
 
-          <Button size="lg" className="mt-8" onClick={handleStart} variant="destructive">
+          <Button size="lg" className="mt-8" onClick={handleStart} variant="destructive" disabled={hasCameraPermission === false}>
             Start Session
           </Button>
           <audio ref={audioRef} />
+           {hasCameraPermission === false && (
+              <Alert variant="destructive" className="mt-4">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Camera Access Denied</AlertTitle>
+                <AlertDescription>
+                  Please enable camera permissions in your browser settings to use this app. You may need to refresh the page.
+                </AlertDescription>
+              </Alert>
+          )}
         </div>
       )}
       
@@ -520,5 +540,7 @@ export function SparringSession() {
     </>
   );
 }
+
+    
 
     
