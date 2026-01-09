@@ -10,6 +10,10 @@ body {
   background-attachment: fixed;
 }
 
+body.sparring-active {
+  background-image: none;
+}
+
 @layer base {
   :root {
     --background: 240 10% 3.9%;
